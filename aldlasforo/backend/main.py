@@ -63,24 +63,8 @@ MEDIA_PUBLIC_BASE_URL = (
 ).rstrip("/")
 MEDIA_STORAGE_MODE = os.getenv("MEDIA_STORAGE_MODE", "local").strip().lower() or "local"
 
-# Try to create local directories, but don't fail in serverless environments (Vercel)
-# Add extra directories to handle missing static folders gracefully
-_optional_dirs = [
-    UPLOADS_DIR, IMAGES_DIR, VIDEOS_DIR, DATA_DIR,
-    ASSETS_DIR / "audio",
-    ASSETS_DIR / "recursos",
-    ASSETS_DIR / "videos",
-    BASE_DIR / "css",
-    BASE_DIR / "js",
-]
-for _d in _optional_dirs:
-    try:
-        _d.mkdir(parents=True, exist_ok=True)
-    except (OSError, PermissionError):
-        # Silently ignore if we can't create directories (e.g., read-only filesystem in Vercel)
-        pass
-
-# Always ensure /tmp/uploads exists
+# Only /tmp is writable in Vercel. Never attempt to create local static directories.
+# Always ensure /tmp/uploads exists (this is the ONLY directory creation allowed)
 try:
     TMP_UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 except (OSError, PermissionError):
