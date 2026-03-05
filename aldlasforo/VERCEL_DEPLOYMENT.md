@@ -9,15 +9,22 @@ Vercel es un entorno **serverless** con restricciones de escritura de archivos. 
 - **Ahora**: Se guardan en `/tmp/uploads/` (directorio disponible y escribible en Vercel)
 - **Archivo modificado**: `backend/main.py` (línea 51)
 
-### 2. **Creación de Directorios Protegida**
+### 2. **Creación de Directorios Protegida y Extensible**
 - Se envolvieron todas las llamadas `mkdir()` en bloques `try-except`
 - Si un directorio no puede crearse (como `/assets/` en Vercel), no causará un error fatal
-- **Archivo modificado**: `backend/main.py` (líneas 68-75)
+- Se agregan automáticamente directorios opcionales: `audio/`, `recursos/`, `videos/`, etc.
+- **Archivo modificado**: `backend/main.py` (líneas 68-84)
 
 ### 3. **Manejo de Almacenamiento Local Mejorado**
 - La función `move_to_local_storage()` ahora maneja errores de permisos elegantemente
 - Si el almacenamiento local no está disponible, intenta usar `MEDIA_PUBLIC_BASE_URL`
 - **Archivo modificado**: `backend/main.py` (líneas 1410-1437)
+
+### 4. **Favicon y Archivos Estáticos Opcionales (NUEVO)**
+- El endpoint `/favicon.ico` ahora devuelve 204 No Content en lugar de fallar
+- Los directorios estáticos (`/css`, `/js`, `/assets`) se montan con fallback a directorios vacíos
+- Si falta alguna carpeta de recursos, la aplicación **NO se cierra**, continúa funcionando
+- **Archivo modificado**: `backend/main.py` (líneas 1488-1538)
 
 ---
 
