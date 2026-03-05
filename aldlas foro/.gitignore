@@ -54,6 +54,8 @@ yarn-error.log*
 # --- ESPECÍFICO PARA ALDLAS (Peso y Seguridad) ---
 # Ignora todas las fotos de anime, videos y thumbnails pesados
 assets/ 
+# Pero permite los .gitkeep para mantener estructura de carpetas
+!assets/**/.gitkeep
 
 # Ignora registros de IPs y límites de rate-limit por privacidad
 data/ 
