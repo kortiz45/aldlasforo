@@ -1465,27 +1465,19 @@ def startup() -> None:
         _save_settings_store(_default_settings_store())
 
 
-# Mount static directories only when they already exist (read-only safe on Vercel)
+# Mount static directories - Vercel read-only safe implementation
 _css_dir = BASE_DIR / "css"
 _js_dir = BASE_DIR / "js"
+_audio_dir = ASSETS_DIR / "audio"
+_recursos_dir = ASSETS_DIR / "recursos"
 
-try:
-    if _css_dir.is_dir():
-        app.mount("/css", StaticFiles(directory=_css_dir.as_posix()), name="css")
-except Exception:
-    pass
-
-try:
-    if _js_dir.is_dir():
-        app.mount("/js", StaticFiles(directory=_js_dir.as_posix()), name="js")
-except Exception:
-    pass
-
-try:
-    if ASSETS_DIR.is_dir():
-        app.mount("/assets", StaticFiles(directory=ASSETS_DIR.as_posix()), name="assets")
-except Exception:
-    pass
+# Efficient loop-based mounting with exists() and is_dir() checks
+for path, name in [(_css_dir, "css"), (_js_dir, "js"), (ASSETS_DIR, "assets"), (_audio_dir, "audio"), (_recursos_dir, "recursos")]:
+    if path.exists() and path.is_dir():
+        try:
+            app.mount(f"/{name}", StaticFiles(directory=str(path)), name=name)
+        except Exception:
+            pass
 
 
 @app.get("/favicon.ico")
