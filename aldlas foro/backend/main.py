@@ -1458,21 +1458,39 @@ def startup() -> None:
 # Mount static directories if they exist, create empty ones if needed
 _css_dir = BASE_DIR / "css"
 _js_dir = BASE_DIR / "js"
+_audio_dir = ASSETS_DIR / "audio"
 
 # Try to create directories if they don't exist (important for Vercel)
-for _static_dir in (_css_dir, _js_dir, ASSETS_DIR):
+for _static_dir in (_css_dir, _js_dir, ASSETS_DIR, _audio_dir):
     try:
         _static_dir.mkdir(parents=True, exist_ok=True)
     except (OSError, PermissionError):
         pass
 
 # Mount static files directories if they exist
-if _css_dir.exists():
-    app.mount("/css", StaticFiles(directory=str(_css_dir)), name="css")
-if _js_dir.exists():
-    app.mount("/js", StaticFiles(directory=str(_js_dir)), name="js")
-if ASSETS_DIR.exists():
-    app.mount("/assets", StaticFiles(directory=str(ASSETS_DIR)), name="assets")
+try:
+    if _css_dir.exists():
+        app.mount("/css", StaticFiles(directory=str(_css_dir)), name="css")
+except Exception:
+    pass
+
+try:
+    if _js_dir.exists():
+        app.mount("/js", StaticFiles(directory=str(_js_dir)), name="js")
+except Exception:
+    pass
+
+try:
+    if ASSETS_DIR.exists():
+        app.mount("/assets", StaticFiles(directory=str(ASSETS_DIR)), name="assets")
+except Exception:
+    pass
+
+
+@app.get("/favicon.ico")
+async def favicon():
+    """Return 204 No Content for favicon requests to prevent 500 errors."""
+    return Response(status_code=204)
 
 
 @app.get("/")
