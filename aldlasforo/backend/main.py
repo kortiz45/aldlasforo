@@ -1411,8 +1411,7 @@ def move_to_local_storage(*, temp_path: Path, object_name: str, media_kind: str)
     final_path = target_root / object_name
     
     try:
-        # Try to create directory and move file locally
-        final_path.parent.mkdir(parents=True, exist_ok=True)
+        # Try to move file locally (no mkdir - Vercel filesystem is read-only)
         temp_path.replace(final_path)
         relative = final_path.relative_to(ASSETS_DIR).as_posix()
         if MEDIA_PUBLIC_BASE_URL:
