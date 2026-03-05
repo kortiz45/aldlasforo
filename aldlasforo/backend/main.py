@@ -64,10 +64,20 @@ MEDIA_PUBLIC_BASE_URL = (
 MEDIA_STORAGE_MODE = os.getenv("MEDIA_STORAGE_MODE", "local").strip().lower() or "local"
 
 # Try to create local directories, but don't fail in serverless environments (Vercel)
-for _d in (UPLOADS_DIR, IMAGES_DIR, VIDEOS_DIR, DATA_DIR):
+# Add extra directories to handle missing static folders gracefully
+_optional_dirs = [
+    UPLOADS_DIR, IMAGES_DIR, VIDEOS_DIR, DATA_DIR,
+    ASSETS_DIR / "audio",
+    ASSETS_DIR / "recursos",
+    ASSETS_DIR / "videos",
+    BASE_DIR / "css",
+    BASE_DIR / "js",
+]
+for _d in _optional_dirs:
     try:
         _d.mkdir(parents=True, exist_ok=True)
     except (OSError, PermissionError):
+        # Silently ignore if we can't create directories (e.g., read-only filesystem in Vercel)
         pass
 
 # Always ensure /tmp/uploads exists
@@ -1459,17 +1469,21 @@ def startup() -> None:
 _css_dir = BASE_DIR / "css"
 _js_dir = BASE_DIR / "js"
 _audio_dir = ASSETS_DIR / "audio"
+_recursos_dir = ASSETS_DIR / "recursos"
 
 # Try to create directories if they don't exist (important for Vercel)
-for _static_dir in (_css_dir, _js_dir, ASSETS_DIR, _audio_dir):
+for _static_dir in (_css_dir, _js_dir, ASSETS_DIR, _audio_dir, _recursos_dir):
     try:
         _static_dir.mkdir(parents=True, exist_ok=True)
     except (OSError, PermissionError):
         pass
 
-# Mount static files directories if they exist
+# Mount static files directories if they exist, with fallback to empty directories
 try:
     if _css_dir.exists():
+        app.mount("/css", StaticFiles(directory=str(_css_dir)), name="css")
+    else:
+        _css_dir.mkdir(parents=True, exist_ok=True)
         app.mount("/css", StaticFiles(directory=str(_css_dir)), name="css")
 except Exception:
     pass
@@ -1477,11 +1491,17 @@ except Exception:
 try:
     if _js_dir.exists():
         app.mount("/js", StaticFiles(directory=str(_js_dir)), name="js")
+    else:
+        _js_dir.mkdir(parents=True, exist_ok=True)
+        app.mount("/js", StaticFiles(directory=str(_js_dir)), name="js")
 except Exception:
     pass
 
 try:
     if ASSETS_DIR.exists():
+        app.mount("/assets", StaticFiles(directory=str(ASSETS_DIR)), name="assets")
+    else:
+        ASSETS_DIR.mkdir(parents=True, exist_ok=True)
         app.mount("/assets", StaticFiles(directory=str(ASSETS_DIR)), name="assets")
 except Exception:
     pass
@@ -1489,7 +1509,8 @@ except Exception:
 
 @app.get("/favicon.ico")
 async def favicon():
-    """Return 204 No Content for favicon requests to prevent 500 errors."""
+    """Return 204 No Content for favicon requests to prevent 500 errors. 
+    Favicon is optional and should not crash the application."""
     return Response(status_code=204)
 
 
