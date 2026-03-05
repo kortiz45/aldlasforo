@@ -48,7 +48,8 @@ ASSETS_DIR = BASE_DIR / "assets"
 UPLOADS_DIR = ASSETS_DIR / "uploads"
 IMAGES_DIR = UPLOADS_DIR / "images"
 VIDEOS_DIR = UPLOADS_DIR / "videos"
-TMP_UPLOADS_DIR = UPLOADS_DIR / "_tmp"
+# Use /tmp for temporary uploads in Vercel/serverless environments
+TMP_UPLOADS_DIR = Path("/tmp") / "uploads"
 DATA_DIR = BASE_DIR / "data"
 VIP_PAYMENT_QR_FILE = DATA_DIR / "vip-payment-qr.json"
 USERS_FILE = DATA_DIR / "users.json"
@@ -62,8 +63,18 @@ MEDIA_PUBLIC_BASE_URL = (
 ).rstrip("/")
 MEDIA_STORAGE_MODE = os.getenv("MEDIA_STORAGE_MODE", "local").strip().lower() or "local"
 
-for _d in (UPLOADS_DIR, IMAGES_DIR, VIDEOS_DIR, TMP_UPLOADS_DIR, DATA_DIR):
-    _d.mkdir(parents=True, exist_ok=True)
+# Try to create local directories, but don't fail in serverless environments (Vercel)
+for _d in (UPLOADS_DIR, IMAGES_DIR, VIDEOS_DIR, DATA_DIR):
+    try:
+        _d.mkdir(parents=True, exist_ok=True)
+    except (OSError, PermissionError):
+        pass
+
+# Always ensure /tmp/uploads exists
+try:
+    TMP_UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+except (OSError, PermissionError):
+    pass
 
 def _load_env_file(path: Path) -> None:
     if not path.exists():
@@ -1398,14 +1409,33 @@ async def upload_to_supabase_storage(*, temp_path: Path, object_key: str, conten
 
 
 def move_to_local_storage(*, temp_path: Path, object_name: str, media_kind: str) -> str:
+    """
+    Move uploaded file to local storage. In serverless environments (Vercel),
+    this fails gracefully and returns the MEDIA_PUBLIC_BASE_URL if configured.
+    """
     target_root = IMAGES_DIR if media_kind == "image" else VIDEOS_DIR
     final_path = target_root / object_name
-    final_path.parent.mkdir(parents=True, exist_ok=True)
-    temp_path.replace(final_path)
-    relative = final_path.relative_to(ASSETS_DIR).as_posix()
-    if MEDIA_PUBLIC_BASE_URL:
-        return f"{MEDIA_PUBLIC_BASE_URL}/assets/{relative}"
-    return f"/assets/{relative}"
+    
+    try:
+        # Try to create directory and move file locally
+        final_path.parent.mkdir(parents=True, exist_ok=True)
+        temp_path.replace(final_path)
+        relative = final_path.relative_to(ASSETS_DIR).as_posix()
+        if MEDIA_PUBLIC_BASE_URL:
+            return f"{MEDIA_PUBLIC_BASE_URL}/assets/{relative}"
+        return f"/assets/{relative}"
+    except (OSError, PermissionError) as e:
+        # In serverless environments (Vercel), local storage is read-only
+        # Return a placeholder URL based on MEDIA_PUBLIC_BASE_URL
+        if MEDIA_PUBLIC_BASE_URL:
+            # Return a URL that references the external storage
+            return f"{MEDIA_PUBLIC_BASE_URL}/{media_kind}s/{object_name}"
+        # If no external URL is configured, raise an error
+        raise HTTPException(
+            status_code=503,
+            detail="Local storage not available and no MEDIA_PUBLIC_BASE_URL configured. "
+                   "Please set MEDIA_PUBLIC_BASE_URL or HOSTGATOR_BASE_URL environment variable."
+        )
 
 
 @app.on_event("startup")
