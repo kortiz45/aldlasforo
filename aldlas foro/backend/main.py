@@ -1455,9 +1455,24 @@ def startup() -> None:
         _save_settings_store(_default_settings_store())
 
 
-app.mount("/css", StaticFiles(directory=str(BASE_DIR / "css")), name="css")
-app.mount("/js", StaticFiles(directory=str(BASE_DIR / "js")), name="js")
-app.mount("/assets", StaticFiles(directory=str(ASSETS_DIR)), name="assets")
+# Mount static directories if they exist, create empty ones if needed
+_css_dir = BASE_DIR / "css"
+_js_dir = BASE_DIR / "js"
+
+# Try to create directories if they don't exist (important for Vercel)
+for _static_dir in (_css_dir, _js_dir, ASSETS_DIR):
+    try:
+        _static_dir.mkdir(parents=True, exist_ok=True)
+    except (OSError, PermissionError):
+        pass
+
+# Mount static files directories if they exist
+if _css_dir.exists():
+    app.mount("/css", StaticFiles(directory=str(_css_dir)), name="css")
+if _js_dir.exists():
+    app.mount("/js", StaticFiles(directory=str(_js_dir)), name="js")
+if ASSETS_DIR.exists():
+    app.mount("/assets", StaticFiles(directory=str(ASSETS_DIR)), name="assets")
 
 
 @app.get("/")
