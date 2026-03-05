@@ -1465,44 +1465,25 @@ def startup() -> None:
         _save_settings_store(_default_settings_store())
 
 
-# Mount static directories if they exist, create empty ones if needed
+# Mount static directories only when they already exist (read-only safe on Vercel)
 _css_dir = BASE_DIR / "css"
 _js_dir = BASE_DIR / "js"
-_audio_dir = ASSETS_DIR / "audio"
-_recursos_dir = ASSETS_DIR / "recursos"
 
-# Try to create directories if they don't exist (important for Vercel)
-for _static_dir in (_css_dir, _js_dir, ASSETS_DIR, _audio_dir, _recursos_dir):
-    try:
-        _static_dir.mkdir(parents=True, exist_ok=True)
-    except (OSError, PermissionError):
-        pass
-
-# Mount static files directories if they exist, with fallback to empty directories
 try:
-    if _css_dir.exists():
-        app.mount("/css", StaticFiles(directory=str(_css_dir)), name="css")
-    else:
-        _css_dir.mkdir(parents=True, exist_ok=True)
-        app.mount("/css", StaticFiles(directory=str(_css_dir)), name="css")
+    if _css_dir.is_dir():
+        app.mount("/css", StaticFiles(directory=_css_dir.as_posix()), name="css")
 except Exception:
     pass
 
 try:
-    if _js_dir.exists():
-        app.mount("/js", StaticFiles(directory=str(_js_dir)), name="js")
-    else:
-        _js_dir.mkdir(parents=True, exist_ok=True)
-        app.mount("/js", StaticFiles(directory=str(_js_dir)), name="js")
+    if _js_dir.is_dir():
+        app.mount("/js", StaticFiles(directory=_js_dir.as_posix()), name="js")
 except Exception:
     pass
 
 try:
-    if ASSETS_DIR.exists():
-        app.mount("/assets", StaticFiles(directory=str(ASSETS_DIR)), name="assets")
-    else:
-        ASSETS_DIR.mkdir(parents=True, exist_ok=True)
-        app.mount("/assets", StaticFiles(directory=str(ASSETS_DIR)), name="assets")
+    if ASSETS_DIR.is_dir():
+        app.mount("/assets", StaticFiles(directory=ASSETS_DIR.as_posix()), name="assets")
 except Exception:
     pass
 
