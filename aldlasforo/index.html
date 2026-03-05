@@ -1,0 +1,1236 @@
+﻿﻿<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>aldlas foro - Unknown</title>
+    <script src="js/devtools-guard.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Montserrat:wght@300;500&display=swap" rel="stylesheet">
+    
+    <style>
+        /* --- RESET Y BASE --- */
+        * { box-sizing: border-box; }
+        :root {
+            --max-width: 1200px;
+            --space-1: 4px;
+            --space-2: 8px;
+            --space-3: 12px;
+            --space-4: 16px;
+            --space-5: 20px;
+            --space-6: 24px;
+            --radius-1: 6px;
+            --radius-2: 8px;
+            --radius-3: 10px;
+            --text-primary: #ffffff;
+            --text-secondary: #9fb2c8;
+            --card-bg: rgba(15, 15, 20, 0.6);
+            --card-border: rgba(255, 255, 255, 0.1);
+            --card-shadow: 0 20px 40px rgba(0,0,0,0.4);
+            --accent: #00ff88;
+            --accent-soft: rgba(0,255,136,0.12);
+            --info: #7ad1ff;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            width: 100vw;
+            background-color: #000000;
+            font-family: 'Montserrat', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            color: var(--text-primary);
+        }
+
+                /* --- FONDO DE MISTERIO ANIMADO --- */
+        .background-parallax {
+            position: fixed;
+            inset: 0;
+            z-index: -1;
+            pointer-events: none;
+            overflow: hidden;
+            will-change: transform;
+            transform: translate3d(0, 0, 0);
+            --spot-x: 50%;
+            --spot-y: 50%;
+        }
+
+        .background-motion {
+            position: absolute;
+            inset: -18px;
+            will-change: transform;
+            transform: translate3d(0, 0, 0);
+        }
+
+        .background-layer {
+            position: absolute;
+            top: -4%; left: -4%;
+            width: 108%; height: 108%;
+            z-index: 0;
+            /* Imagen de humo/niebla oscura de alta calidad */
+            background-image: url('https://images.unsplash.com/photo-1535083252457-6080fe29be45?q=80&w=1920&auto=format&fit=crop');
+            background-size: cover;
+            background-position: center;
+            /* AnimaciÃ³n lenta de zoom/movimiento para dar vida */
+            animation: mystery-breathe 20s infinite alternate ease-in-out;
+            opacity: 0.6; /* Oscuro para que no moleste */
+        }
+
+        /* Una capa negra encima para asegurar que sea tenebroso */
+        .overlay-layer {
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(circle at center, transparent 0%, #000000 90%);
+            z-index: 1;
+        }
+
+        .cursor-spotlight {
+            position: absolute;
+            inset: 0;
+            z-index: 2;
+            pointer-events: none;
+            opacity: 0.45;
+            background: radial-gradient(430px circle at var(--spot-x) var(--spot-y), rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0) 60%);
+            mix-blend-mode: screen;
+            transition: opacity 0.25s ease;
+        }
+
+        @keyframes mystery-breathe {
+            0% { transform: scale(1); filter: contrast(100%) brightness(0.8); }
+            100% { transform: scale(1.15); filter: contrast(120%) brightness(0.6); }
+        }
+
+        /* --- CAJA CENTRAL (Espectro) --- */
+        .login-wrapper {
+            position: relative;
+            width: min(92vw, 460px);
+            max-width: 460px;
+            padding: 22px;
+            z-index: 10;
+        }
+        
+
+        .phantom-box {
+            background: var(--card-bg);
+            backdrop-filter: blur(8px);
+            border: 1px solid var(--card-border);
+            border-radius: var(--radius-3);
+            padding: 78px 48px 170px 48px;
+            box-shadow: var(--card-shadow);
+            text-align: center;
+            transition: border-color 0.5s;
+        }
+
+        .header-block {
+            margin-bottom: 56px;
+        }
+        .theme-badge {
+            display: inline-block;
+            margin-left: 8px;
+            padding: 3px 8px;
+            border-radius: 999px;
+            border: 1px solid var(--card-border);
+            background: var(--accent);
+            color: #04110a;
+            font-size: 0.7rem;
+            letter-spacing: 1px;
+        }
+
+        .phantom-box:hover {
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        /* --- LOGO FANTASMA --- */
+        .logo-frame {
+            width: 90px; height: 90px;
+            margin: 0 auto 10px;
+            border-radius: 50%;
+            /* Borde doble fino */
+            border: 1px solid rgba(255,255,255,0.1);
+            padding: 4px; 
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            transition: 0.5s;
+            animation: logo-float 4.8s ease-in-out infinite;
+            will-change: transform;
+        }
+        
+        .phantom-box:hover .logo-frame {
+            border-color: rgba(255,255,255,0.4);
+            box-shadow: 0 0 20px rgba(255,255,255,0.05);
+        }
+
+        .logo-img {
+            width: 100%; height: 100%; 
+            border-radius: 50%;
+            object-fit: cover;
+            filter: grayscale(100%) contrast(120%); /* Logo en blanco y negro */
+            opacity: 0.8;
+            animation: logo-breathe 5.5s ease-in-out infinite;
+        }
+
+        @keyframes logo-float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-6px); }
+        }
+
+        @keyframes logo-breathe {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.03); }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .logo-frame, .logo-img, #form-title {
+                animation: none;
+            }
+            .background-parallax {
+                transform: none !important;
+            }
+            .background-motion {
+                transform: none !important;
+            }
+            .cursor-spotlight {
+                display: none;
+            }
+        }
+
+        h1 {
+            font-family: 'Cinzel', serif;
+            font-size: 2.05rem;
+            margin: 0;
+            letter-spacing: 5px;
+            color: #fff;
+            text-shadow: 0 0 10px rgba(0,0,0,0.8);
+            font-weight: 400;
+        }
+
+        #form-title {
+            display: inline-block;
+            transform-origin: center;
+            animation: brand-pum 2.8s ease-in-out infinite;
+            will-change: transform;
+        }
+
+        @keyframes brand-pum {
+            0%, 100% { transform: scale(1); }
+            45% { transform: scale(1.045); }
+            55% { transform: scale(1.02); }
+        }
+
+        /* --- INPUTS INVISIBLES --- */
+        .mystery-input {
+            position: relative;
+            margin-bottom: 30px;
+        }
+
+        .mystery-input input {
+            width: 100%;
+            background: transparent;
+            border: none;
+            /* Solo una lÃ­nea muy fina abajo */
+            border-bottom: 1px solid rgba(255,255,255,0.2);
+            padding: 10px 0;
+            color: #fff;
+            font-family: 'Montserrat', sans-serif;
+            font-size: 1rem;
+            letter-spacing: 2px;
+            outline: none;
+            transition: 0.4s;
+        }
+
+        .mystery-input label {
+            position: absolute;
+            top: 10px; left: 0;
+            font-size: 0.75rem;
+            color: #666;
+            letter-spacing: 3px;
+            pointer-events: none;
+            transition: 0.4s;
+            text-transform: uppercase;
+        }
+
+        /* AnimaciÃ³n de foco */
+        .mystery-input input:focus {
+            border-bottom-color: #fff;
+            box-shadow: 0 10px 10px -10px rgba(255,255,255,0.1);
+        }
+        .mystery-input input:focus ~ label,
+        .mystery-input input:valid ~ label {
+            top: -20px;
+            color: #aaa;
+            font-size: 0.6rem;
+        }
+
+        /* --- BOTÃ“N DE ENIGMA --- */
+        .enigma-btn {
+            width: 100%;
+            padding: 18px;
+            background: transparent;
+            border: 1px solid var(--card-border);
+            color: rgba(255,255,255,0.8);
+            font-family: 'Cinzel', serif;
+            font-size: 0.85rem;
+            letter-spacing: 4px;
+            cursor: pointer;
+            transition: 0.6s;
+            text-transform: uppercase;
+            margin-top: 0;
+        }
+
+        .enigma-btn:hover {
+            background: #fff;
+            color: #000;
+            border-color: #fff;
+            box-shadow: 0 0 30px rgba(255,255,255,0.2);
+        }
+
+        .register-btn {
+            padding: 18px;
+            font-size: 0.95rem;
+            letter-spacing: 4px;
+            font-weight: 600;
+        }
+
+        .register-open-btn {
+            color: var(--info);
+            border-color: var(--info);
+            padding: 18px;
+            font-size: 0.95rem;
+            letter-spacing: 4px;
+            font-weight: 600;
+            border-width: 1px;
+        }
+
+        .action-group {
+            margin-top: 40px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            width: 100%;
+        }
+
+        .login-status {
+            margin-top: 14px;
+            min-height: 1.1em;
+            font-size: 0.72rem;
+            letter-spacing: 1px;
+            color: #ff7f7f;
+            text-transform: uppercase;
+        }
+
+        .register-open-btn:hover {
+            background: var(--info);
+            color: #000;
+            border-color: var(--info);
+            box-shadow: 0 0 30px rgba(122, 209, 255, 0.25);
+        }
+
+        /* --- FOOTER DISCRETO --- */
+        .footer-whisper {
+            margin-top: 40px;
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            letter-spacing: 1px;
+        }
+
+        .footer-link {
+            color: #666;
+            text-decoration: none;
+            transition: 0.3s;
+        }
+        .footer-link:hover { color: #fff; }
+
+        .login-audio-player {
+            position: fixed;
+            width: 1px;
+            height: 1px;
+            top: -9999px;
+            left: -9999px;
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .music-toggle-btn {
+            margin-top: 22px;
+            width: 100%;
+            padding: 12px;
+            border: 1px solid rgba(122, 209, 255, 0.55);
+            background: rgba(10, 16, 22, 0.72);
+            color: #7ad1ff;
+            font-family: 'Montserrat', sans-serif;
+            font-size: 0.8rem;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            cursor: pointer;
+            transition: 0.25s ease;
+        }
+
+        .music-toggle-btn:hover {
+            background: #7ad1ff;
+            color: #041017;
+            border-color: #7ad1ff;
+        }
+
+        .music-status {
+            margin-top: 8px;
+            min-height: 1.1em;
+            color: #7a8b9a;
+            font-size: 0.68rem;
+            letter-spacing: 1px;
+            text-align: center;
+        }
+
+        .music-activation-layer {
+            position: fixed;
+            inset: 0;
+            z-index: 500;
+            background: rgba(0,0,0,0.65);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            pointer-events: auto;
+            transition: background 0.3s;
+        }
+
+        .music-activation-layer.is-hidden {
+            display: none;
+        }
+
+        .music-activation-message {
+            color: #fff;
+            font-size: 2rem;
+            background: rgba(0,0,0,0.8);
+            padding: 32px 48px;
+            border-radius: 18px;
+            box-shadow: 0 4px 32px #000a;
+            text-align: center;
+            font-family: 'Montserrat', Arial, sans-serif;
+            max-width: 90vw;
+        }
+    </style>
+</head>
+<body>
+
+        <div id="music-activation-layer" class="music-activation-layer" aria-hidden="true" style="display:none">
+            <div class="music-activation-message">
+                🔊 Haz clic en cualquier parte para activar la música de bienvenida
+            </div>
+        </div>
+    <audio id="login-audio-player" class="login-audio-player" preload="auto" autoplay muted playsinline webkit-playsinline></audio>
+
+    <div class="background-parallax" id="background-parallax">
+        <div class="background-motion" id="background-motion">
+            <div class="background-layer"></div>
+        </div>
+        <div class="overlay-layer"></div>
+        <div class="cursor-spotlight" aria-hidden="true"></div>
+    </div>
+
+    <div class="login-wrapper">
+        <div class="phantom-box">
+            
+            <div class="header-block">
+                <div class="logo-frame">
+                    <img src="assets/cursos/logo.jpg" alt="aldlas foro" class="logo-img" onerror="this.style.backgroundColor='#111'">
+                </div>
+                <h1 id="form-title">aldlas foro</h1>
+            </div>
+
+            <form id="login-form">
+                <div class="mystery-input">
+                    <input type="text" id="login-user" required autocomplete="off">
+                    <label>Identidad</label>
+                </div>
+
+                <div class="mystery-input">
+                    <input type="password" id="login-pass" required autocomplete="off">
+                    <label>Clave</label>
+                </div>
+
+                <div class="action-group">
+                    <button type="submit" class="enigma-btn">Desvelar Acceso</button>
+                    <button type="button" class="enigma-btn register-open-btn" onclick="toggleMode('register')">
+                        REGISTRARME
+                    </button>
+                </div>
+                <div id="login-status" class="login-status"></div>
+            </form>
+
+            <form id="register-form" style="display:none;">
+                <div class="mystery-input">
+                    <input type="text" id="register-user" required autocomplete="off">
+                    <label>Elige tu Usuario</label>
+                </div>
+
+                <div class="mystery-input">
+                    <input type="password" id="register-pass" required autocomplete="off">
+                    <label>Crea tu Clave</label>
+                </div>
+
+                <div class="mystery-input">
+                    <input type="password" id="register-pass-confirm" required autocomplete="off">
+                    <label>Confirma tu Clave</label>
+                </div>
+
+                <div class="action-group">
+                    <button type="submit" class="enigma-btn register-btn" style="border-color:#7ad1ff; color:#7ad1ff;">REGISTRARME</button>
+                    <p class="footer-whisper" style="margin-top: 0;">
+                        <span onclick="toggleMode('login')" style="cursor:pointer; color:#888;">
+                            Volver al Login
+                        </span>
+                    </p>
+                </div>
+            </form>
+
+            <button type="button" id="music-toggle-btn" class="music-toggle-btn">Activar musica</button>
+            <p id="music-status" class="music-status"></p>
+
+        </div>
+    </div>
+    
+
+    <script>
+        // ConfiguraciÃ³n inicial
+        if (!localStorage.getItem('mb_machine_id')) {
+            localStorage.setItem('mb_machine_id', 'PC-' + Math.random().toString(36).substr(2, 9).toUpperCase());
+        }
+        const thisPC = localStorage.getItem('mb_machine_id');
+        const loginMusicPlaylist = [
+            'assets/audio/login-track-1.mp3',
+            'assets/audio/login-track-2.mp3',
+            'assets/audio/login-track-3.mp3',
+            'assets/audio/login-track-4.mp3',
+            'assets/audio/login-track-5.mp3'
+        ];
+        const loginMusicRotationKey = 'mb_login_music_rotation_index';
+        const legacyLoginMusicEnabledKey = 'mb_login_music_enabled';
+        const loginMusicEnabledKey = 'mb_login_music_enabled_v2';
+        const loginMusicSessionKey = 'mb_login_music_enabled_session';
+        const loginAudioPlayer = document.getElementById('login-audio-player');
+        let musicEnabled = false;
+        if (loginAudioPlayer) {
+            loginAudioPlayer.preload = 'auto';
+            loginAudioPlayer.autoplay = true;
+            loginAudioPlayer.playsInline = true;
+            loginAudioPlayer.setAttribute('playsinline', '');
+            loginAudioPlayer.setAttribute('webkit-playsinline', '');
+        }
+        if (sessionStorage.getItem(loginMusicSessionKey) === null) {
+            sessionStorage.setItem(loginMusicSessionKey, '1');
+        }
+        localStorage.setItem(loginMusicEnabledKey, '1');
+        localStorage.setItem(legacyLoginMusicEnabledKey, '1');
+        let musicPreferenceEnabled = sessionStorage.getItem(loginMusicSessionKey) === '1';
+        let currentMusicIndex = 0;
+        let autoplayRetryTimer = null;
+        const musicActivationLayer = document.getElementById('music-activation-layer');
+        const musicToggleBtn = document.getElementById('music-toggle-btn');
+        const musicStatus = document.getElementById('music-status');
+
+        function setMusicStatus(message) {
+            if (musicStatus) {
+                musicStatus.textContent = message || '';
+            }
+        }
+
+        function updateMusicToggleUI() {
+            if (!musicToggleBtn) return;
+            musicToggleBtn.textContent = musicPreferenceEnabled ? 'Desactivar musica' : 'Activar musica';
+        }
+
+        function setMusicPreference(enabled) {
+            musicPreferenceEnabled = !!enabled;
+            sessionStorage.setItem(loginMusicSessionKey, musicPreferenceEnabled ? '1' : '0');
+            updateMusicToggleUI();
+            if (!musicPreferenceEnabled) {
+                hideMusicActivationLayer();
+            }
+        }
+
+        function runMusicSelfTests() {
+            const prevSessionValue = sessionStorage.getItem(loginMusicSessionKey);
+            sessionStorage.removeItem(loginMusicSessionKey);
+            if (sessionStorage.getItem(loginMusicSessionKey) === null) {
+                sessionStorage.setItem(loginMusicSessionKey, '1');
+            }
+            const defaultEnabled = sessionStorage.getItem(loginMusicSessionKey) === '1';
+            setMusicPreference(false);
+            const disabledNow = musicPreferenceEnabled === false && sessionStorage.getItem(loginMusicSessionKey) === '0';
+            setMusicPreference(true);
+            const enabledNow = musicPreferenceEnabled === true && sessionStorage.getItem(loginMusicSessionKey) === '1';
+            if (prevSessionValue === null) {
+                sessionStorage.removeItem(loginMusicSessionKey);
+            } else {
+                sessionStorage.setItem(loginMusicSessionKey, prevSessionValue);
+            }
+            return defaultEnabled && disabledNow && enabledNow;
+        }
+
+        const shouldRunMusicTests = new URLSearchParams(location.search).get('musicTest') === '1';
+        if (shouldRunMusicTests) {
+            const ok = runMusicSelfTests();
+            setMusicStatus(ok ? 'Pruebas musica ok' : 'Pruebas musica fallo');
+        }
+
+        function showMusicActivationLayer() {
+            if (musicActivationLayer) {
+                musicActivationLayer.style.display = 'none';
+                musicActivationLayer.classList.add('is-hidden');
+            }
+        }
+
+        function hideMusicActivationLayer() {
+            if (musicActivationLayer) {
+                musicActivationLayer.style.display = 'none';
+                musicActivationLayer.classList.add('is-hidden');
+            }
+        }
+
+        function startAutoplayWatchdog() {
+            if (autoplayRetryTimer) return;
+            autoplayRetryTimer = setInterval(function() {
+                if (!musicPreferenceEnabled) {
+                    clearInterval(autoplayRetryTimer);
+                    autoplayRetryTimer = null;
+                    return;
+                }
+                if (musicEnabled && loginAudioPlayer && !loginAudioPlayer.paused && !loginAudioPlayer.muted) {
+                    clearInterval(autoplayRetryTimer);
+                    autoplayRetryTimer = null;
+                    return;
+                }
+                enableLoginMusic(false);
+            }, 1800);
+        }
+
+        function stopAutoplayWatchdog() {
+            if (autoplayRetryTimer) {
+                clearInterval(autoplayRetryTimer);
+                autoplayRetryTimer = null;
+            }
+        }
+
+        function nextTrackIndex(index) {
+            return (index + 1) % loginMusicPlaylist.length;
+        }
+
+        function loadTrack(index) {
+            if (!loginAudioPlayer || !loginMusicPlaylist.length) return;
+            currentMusicIndex = index % loginMusicPlaylist.length;
+            loginAudioPlayer.src = loginMusicPlaylist[currentMusicIndex];
+            loginAudioPlayer.load();
+        }
+
+        function getRotatingStartIndex() {
+            if (!loginMusicPlaylist.length) return 0;
+            const rawValue = localStorage.getItem(loginMusicRotationKey);
+            const lastIndex = Number.parseInt(rawValue, 10);
+            const startIndex = Number.isInteger(lastIndex)
+                ? (lastIndex + 1) % loginMusicPlaylist.length
+                : Math.floor(Math.random() * loginMusicPlaylist.length);
+            localStorage.setItem(loginMusicRotationKey, String(startIndex));
+            return startIndex;
+        }
+
+        function playLoadedTrack(muted) {
+            loginAudioPlayer.volume = 0.45;
+            loginAudioPlayer.muted = !!muted;
+            const playPromise = loginAudioPlayer.play();
+            if (playPromise && typeof playPromise.then === 'function') {
+                return playPromise;
+            }
+            return Promise.resolve();
+        }
+
+        function markMusicActive() {
+            musicEnabled = true;
+            loginAudioPlayer.muted = false;
+            loginAudioPlayer.volume = 0.45;
+            setMusicStatus('Musica activa');
+            hideMusicActivationLayer();
+            stopAutoplayWatchdog();
+        }
+
+        function stopLoginMusic() {
+            if (!loginAudioPlayer) return;
+            loginAudioPlayer.pause();
+            musicEnabled = false;
+            setMusicStatus('Musica desactivada');
+            hideMusicActivationLayer();
+            stopAutoplayWatchdog();
+        }
+
+        function attemptPlaySequence() {
+            const attempts = [
+                function() {
+                    return playLoadedTrack(true);
+                },
+                function() {
+                    return playLoadedTrack(false);
+                },
+                function() {
+                    loginAudioPlayer.load();
+                    return playLoadedTrack(true);
+                },
+                function() {
+                    loginAudioPlayer.load();
+                    return playLoadedTrack(false);
+                },
+                function() {
+                    try {
+                        loginAudioPlayer.currentTime = 0;
+                    } catch (error) {
+                        // Ignorado: algunos streams no permiten seek.
+                    }
+                    return playLoadedTrack(true);
+                },
+                function() {
+                    try {
+                        loginAudioPlayer.currentTime = 0;
+                    } catch (error) {
+                        // Ignorado: algunos streams no permiten seek.
+                    }
+                    return playLoadedTrack(false);
+                }
+            ];
+
+            let chain = Promise.reject(new Error('start'));
+            attempts.forEach(function(step) {
+                chain = chain.catch(function() {
+                    return step();
+                });
+            });
+            return chain;
+        }
+
+        function enableLoginMusic(forceByUser) {
+            if (!loginAudioPlayer || !loginMusicPlaylist.length) {
+                setMusicStatus('No hay pistas configuradas en assets/audio.');
+                return;
+            }
+            if (!musicPreferenceEnabled) {
+                stopLoginMusic();
+                return;
+            }
+            if (forceByUser === true && !loginAudioPlayer.paused) {
+                loginAudioPlayer.muted = false;
+                loginAudioPlayer.volume = 0.45;
+                markMusicActive();
+                return;
+            }
+            if (musicEnabled && !loginAudioPlayer.paused) return;
+
+            try {
+                setMusicStatus('Activando musica...');
+                const playPromise = attemptPlaySequence();
+                const userInitiated = forceByUser === true;
+
+                if (playPromise && typeof playPromise.then === 'function') {
+                    playPromise.then(function() {
+                        if (!userInitiated && loginAudioPlayer.muted) {
+                            musicEnabled = true;
+                            loginAudioPlayer.muted = false;
+                            loginAudioPlayer.volume = 0.45;
+                            setMusicStatus('Sonando en silencio. Intentando activar sonido...');
+                            setTimeout(function() {
+                                if (!musicPreferenceEnabled || !loginAudioPlayer || loginAudioPlayer.paused) {
+                                    return;
+                                }
+                                if (loginAudioPlayer.muted) {
+                                    setMusicStatus('Sonando en silencio. Haz clic en cualquier parte para activar audio.');
+                                    showMusicActivationLayer();
+                                    startAutoplayWatchdog();
+                                    return;
+                                }
+                                markMusicActive();
+                            }, 1200);
+                            return;
+                        }
+                        markMusicActive();
+                    }).catch(function() {
+                        if (userInitiated) {
+                            setMusicStatus('No se pudo iniciar. Haz clic en cualquier parte otra vez.');
+                            showMusicActivationLayer();
+                            return;
+                        }
+                        setMusicStatus('Autoplay parcial. Haz clic en cualquier parte para activar sonido.');
+                        showMusicActivationLayer();
+                        startAutoplayWatchdog();
+                    });
+                } else {
+                    markMusicActive();
+                }
+            } catch (error) {
+                setMusicStatus('No se pudo iniciar audio. Verifica archivos mp3.');
+                startAutoplayWatchdog();
+            }
+        }
+
+        function handleMusicInteraction() {
+            if (musicPreferenceEnabled) {
+                enableLoginMusic(true);
+            }
+        }
+
+        function toggleMusicPreference() {
+            if (musicPreferenceEnabled) {
+                setMusicPreference(false);
+                stopLoginMusic();
+            } else {
+                setMusicPreference(true);
+                enableLoginMusic(true);
+            }
+        }
+
+        if (loginAudioPlayer && loginMusicPlaylist.length) {
+            loadTrack(getRotatingStartIndex());
+            updateMusicToggleUI();
+            if (musicPreferenceEnabled) {
+                enableLoginMusic(false);
+                setTimeout(function() {
+                    if (musicPreferenceEnabled && loginAudioPlayer.paused) {
+                        enableLoginMusic(false);
+                    }
+                }, 1200);
+                startAutoplayWatchdog();
+            } else {
+                setMusicStatus('Musica desactivada');
+                hideMusicActivationLayer();
+            }
+
+            loginAudioPlayer.addEventListener('playing', function() {
+                if (loginAudioPlayer.muted) {
+                    setMusicStatus('Sonando en silencio. Haz clic en cualquier parte para activar audio.');
+                    showMusicActivationLayer();
+                    return;
+                }
+                markMusicActive();
+            });
+
+            loginAudioPlayer.addEventListener('ended', function() {
+                loadTrack(nextTrackIndex(currentMusicIndex));
+                if (musicPreferenceEnabled) {
+                    playLoadedTrack(false).catch(function() {
+                        setMusicStatus('No se pudo continuar. Haz clic en cualquier parte para reactivar.');
+                        showMusicActivationLayer();
+                    });
+                }
+            });
+
+            loginAudioPlayer.addEventListener('error', function() {
+                const nextIndex = nextTrackIndex(currentMusicIndex);
+                if (nextIndex !== currentMusicIndex) {
+                    loadTrack(nextIndex);
+                    if (musicPreferenceEnabled) {
+                        playLoadedTrack(false).catch(function() {
+                            setMusicStatus('No se pudo continuar. Haz clic en cualquier parte para reactivar.');
+                            showMusicActivationLayer();
+                        });
+                    }
+                } else {
+                    setMusicStatus('Error al cargar audio. Revisa assets/audio.');
+                }
+            });
+        } else {
+            setMusicStatus('No se encontro el reproductor de audio.');
+        }
+
+        if (musicToggleBtn) {
+            musicToggleBtn.addEventListener('click', function() {
+                toggleMusicPreference();
+            });
+        }
+
+        // Solo la capa de activación responde al primer clic para todos los usuarios
+        if (musicActivationLayer) {
+            musicActivationLayer.addEventListener('pointerdown', function(e) {
+                handleMusicInteraction();
+                hideMusicActivationLayer();
+            });
+            musicActivationLayer.addEventListener('click', function(e) {
+                handleMusicInteraction();
+                hideMusicActivationLayer();
+            });
+            musicActivationLayer.addEventListener('touchstart', function(e) {
+                handleMusicInteraction();
+                hideMusicActivationLayer();
+            });
+        }
+        window.addEventListener('keydown', handleMusicInteraction);
+        document.addEventListener('visibilitychange', function() {
+            if (!document.hidden && musicPreferenceEnabled && loginAudioPlayer && loginAudioPlayer.paused) {
+                enableLoginMusic(false);
+            }
+        });
+
+        
+        window.addEventListener('focus', function() {
+            if (musicPreferenceEnabled && loginAudioPlayer && loginAudioPlayer.paused) {
+                enableLoginMusic(false);
+            }
+        });
+        // --- PARALLAX SUAVE + SPOTLIGHT CON MOUSE ---
+        const bgParallax = document.getElementById('background-parallax');
+        const bgMotion = document.getElementById('background-motion');
+        const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+        if (bgParallax && bgMotion && !prefersReducedMotion) {
+            let targetX = 0;
+            let targetY = 0;
+            let currentX = 0;
+            let currentY = 0;
+
+            const moveIntensity = 8;
+            const smoothness = 0.08;
+
+            const updateSpotlight = (clientX, clientY) => {
+                const spotX = (clientX / window.innerWidth) * 100;
+                const spotY = (clientY / window.innerHeight) * 100;
+                bgParallax.style.setProperty('--spot-x', `${spotX}%`);
+                bgParallax.style.setProperty('--spot-y', `${spotY}%`);
+            };
+
+            const handlePointerMove = (e) => {
+                const centerX = window.innerWidth / 2;
+                const centerY = window.innerHeight / 2;
+                const normX = (e.clientX - centerX) / centerX;
+                const normY = (e.clientY - centerY) / centerY;
+
+                targetX = -normX * moveIntensity;
+                targetY = -normY * moveIntensity;
+                updateSpotlight(e.clientX, e.clientY);
+            };
+
+            const handlePointerLeave = () => {
+                targetX = 0;
+                targetY = 0;
+            };
+
+            const animateParallax = () => {
+                currentX += (targetX - currentX) * smoothness;
+                currentY += (targetY - currentY) * smoothness;
+                bgMotion.style.transform = `translate3d(${currentX.toFixed(2)}px, ${currentY.toFixed(2)}px, 0)`;
+                requestAnimationFrame(animateParallax);
+            };
+
+            window.addEventListener('pointermove', handlePointerMove, { passive: true });
+            window.addEventListener('pointerleave', handlePointerLeave);
+            animateParallax();
+        }
+
+                // --- FUNCION PARA CAMBIAR ENTRE LOGIN Y REGISTRO ---
+        function toggleMode(mode) {
+            const loginForm = document.getElementById('login-form');
+            const registerForm = document.getElementById('register-form');
+            const title = document.getElementById('form-title');
+            setLoginStatus('');
+
+            if (mode === 'register') {
+                loginForm.style.display = 'none';
+                registerForm.style.display = 'block';
+                title.textContent = 'REGISTRO';
+                title.style.color = '#7ad1ff';
+            } else {
+                loginForm.style.display = 'block';
+                registerForm.style.display = 'none';
+                title.textContent = 'aldlas foro';
+                title.style.color = '#fff';
+            }
+        }
+
+        function setLoginStatus(message, tone) {
+            const statusEl = document.getElementById('login-status');
+            if (!statusEl) return;
+            const palette = {
+                neutral: '#8ea4bb',
+                success: '#00ff88',
+                error: '#ff7f7f'
+            };
+            statusEl.textContent = message || '';
+            statusEl.style.color = palette[tone] || palette.error;
+        }
+
+        function resetLoginInputs() {
+            const loginUser = document.getElementById('login-user');
+            const loginPass = document.getElementById('login-pass');
+            const registerUser = document.getElementById('register-user');
+            const registerPass = document.getElementById('register-pass');
+            const registerPassConfirm = document.getElementById('register-pass-confirm');
+            if (loginUser) loginUser.value = '';
+            if (loginPass) loginPass.value = '';
+            if (registerUser) registerUser.value = '';
+            if (registerPass) registerPass.value = '';
+            if (registerPassConfirm) registerPassConfirm.value = '';
+            setLoginStatus('');
+        }
+
+        window.addEventListener('pageshow', resetLoginInputs);
+        document.addEventListener('DOMContentLoaded', resetLoginInputs);
+
+        function getApiBaseCandidates() {
+            const configuredBase = (localStorage.getItem('mb_api_base_url') || '').trim().replace(/\/$/, '');
+            const candidates = [];
+            if (configuredBase) candidates.push(configuredBase);
+            candidates.push('');
+
+            const isLocal = location.hostname === 'localhost' || location.hostname === '127.0.0.1' || location.protocol === 'file:';
+            if (!configuredBase && isLocal) {
+                candidates.push('http://127.0.0.1:8000');
+                candidates.push('http://localhost:8000');
+            }
+            return { configuredBase, candidates: Array.from(new Set(candidates)) };
+        }
+
+        async function tryAdminLoginRemote(username, password) {
+            const { configuredBase, candidates } = getApiBaseCandidates();
+            let lastError = null;
+
+            for (const base of candidates) {
+                const endpoint = `${base}/api/auth/admin/login`;
+                try {
+                    const res = await fetch(endpoint, {
+                        method: 'POST',
+                        credentials: 'include',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ username, password })
+                    });
+                    let payload = null;
+                    try {
+                        payload = await res.json();
+                    } catch (e) {
+                        payload = null;
+                    }
+
+                    if (!res.ok) {
+                        if (res.status === 401 || res.status === 403) {
+                            return {
+                                ok: false,
+                                authFailed: true,
+                                message: (payload && payload.detail) ? String(payload.detail) : 'Credenciales admin invalidas'
+                            };
+                        }
+                        if (res.status === 404 || res.status === 405) {
+                            lastError = new Error(`Endpoint no disponible (${endpoint})`);
+                            continue;
+                        }
+                        const msg = payload && payload.detail ? payload.detail : `Error HTTP ${res.status}`;
+                        throw new Error(`${msg}${base ? ` (${endpoint})` : ''}`);
+                    }
+
+                    if (base && base !== configuredBase) {
+                        localStorage.setItem('mb_api_base_url', base);
+                    }
+                    return { ok: true, payload };
+                } catch (err) {
+                    lastError = err;
+                }
+            }
+            return { ok: false, authFailed: false, error: lastError };
+        }
+
+        async function tryUserLoginRemote(username, password, deviceId) {
+            const { configuredBase, candidates } = getApiBaseCandidates();
+            let lastError = null;
+
+            for (const base of candidates) {
+                const endpoint = `${base}/api/auth/user/login`;
+                try {
+                    const res = await fetch(endpoint, {
+                        method: 'POST',
+                        credentials: 'include',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            username,
+                            password,
+                            device_id: deviceId,
+                            bind_device: true
+                        })
+                    });
+                    let payload = null;
+                    try {
+                        payload = await res.json();
+                    } catch (e) {
+                        payload = null;
+                    }
+
+                    if (!res.ok) {
+                        const message = payload && payload.detail ? String(payload.detail) : `Error HTTP ${res.status}`;
+                        if (res.status === 401 || res.status === 403 || res.status === 400 || res.status === 409 || res.status === 429) {
+                            return { ok: false, authFailed: true, message };
+                        }
+                        if (res.status === 404 || res.status === 405) {
+                            lastError = new Error(`Endpoint no disponible (${endpoint})`);
+                            continue;
+                        }
+                        throw new Error(`${message}${base ? ` (${endpoint})` : ''}`);
+                    }
+
+                    if (base && base !== configuredBase) {
+                        localStorage.setItem('mb_api_base_url', base);
+                    }
+                    return { ok: true, payload: payload || {} };
+                } catch (err) {
+                    lastError = err;
+                }
+            }
+            return { ok: false, authFailed: false, error: lastError };
+        }
+
+        async function tryUserRegisterRemote(username, password, deviceId) {
+            const { configuredBase, candidates } = getApiBaseCandidates();
+            let lastError = null;
+
+            for (const base of candidates) {
+                const endpoint = `${base}/api/auth/user/register`;
+                try {
+                    const res = await fetch(endpoint, {
+                        method: 'POST',
+                        credentials: 'include',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            username,
+                            password,
+                            device_id: deviceId,
+                            bind_device: true
+                        })
+                    });
+                    let payload = null;
+                    try {
+                        payload = await res.json();
+                    } catch (e) {
+                        payload = null;
+                    }
+
+                    if (!res.ok) {
+                        const message = payload && payload.detail ? String(payload.detail) : `Error HTTP ${res.status}`;
+                        if (res.status === 400 || res.status === 409 || res.status === 429) {
+                            return { ok: false, validationFailed: true, message };
+                        }
+                        if (res.status === 404 || res.status === 405) {
+                            lastError = new Error(`Endpoint no disponible (${endpoint})`);
+                            continue;
+                        }
+                        throw new Error(`${message}${base ? ` (${endpoint})` : ''}`);
+                    }
+
+                    if (base && base !== configuredBase) {
+                        localStorage.setItem('mb_api_base_url', base);
+                    }
+                    return { ok: true, payload: payload || {} };
+                } catch (err) {
+                    lastError = err;
+                }
+            }
+            return { ok: false, validationFailed: false, error: lastError };
+        }
+
+        function persistUserSessionLocal(userPayload) {
+            const user = (userPayload && userPayload.user) ? userPayload.user : null;
+            const username = user && user.username ? user.username : '';
+            const role = user && user.role ? String(user.role).toLowerCase() : 'user';
+            if (!username) return false;
+
+            localStorage.setItem('mb_current_user', username);
+            localStorage.setItem('mb_role', role);
+            localStorage.setItem('mb_current_user_profile', JSON.stringify(user || {}));
+            localStorage.removeItem('mb_admin_session');
+            return true;
+        }
+
+        // --- LÃ“GICA DE LOGIN (NORMAL) ---
+        document.getElementById('login-form').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const userVal = document.getElementById('login-user').value.trim();
+            const passVal = document.getElementById('login-pass').value;
+            setLoginStatus('');
+
+            const adminAttempt = await tryAdminLoginRemote(userVal, passVal);
+            if (adminAttempt.ok) {
+                localStorage.setItem('mb_current_user', userVal);
+                localStorage.setItem('mb_role', 'admin');
+                localStorage.setItem('mb_admin_session', '1');
+                localStorage.setItem('mb_current_user_profile', JSON.stringify({
+                    username: userVal,
+                    role: 'admin',
+                    plan: 'vip',
+                    status: 'VIP',
+                    isVip: true
+                }));
+                window.location.href = "admin.html";
+                return;
+            }
+            if (adminAttempt.authFailed && userVal.toLowerCase() === 'admin') {
+                setLoginStatus('Usuario o contraseña incorrectos.', 'error');
+                return;
+            }
+
+            const userAttempt = await tryUserLoginRemote(userVal, passVal, thisPC);
+            if (userAttempt.ok) {
+                const saved = persistUserSessionLocal(userAttempt.payload || {});
+                if (!saved) {
+                    setLoginStatus('No se pudo iniciar sesión. Respuesta inválida del servidor.', 'error');
+                    return;
+                }
+                window.location.href = "foro.html";
+                return;
+            }
+
+            if (userAttempt.authFailed) {
+                setLoginStatus('Usuario o contraseña incorrectos.', 'error');
+                return;
+            }
+
+            setLoginStatus('No se pudo conectar al servidor de autenticación.', 'neutral');
+        });
+
+        // --- LOGICA DE REGISTRO (NUEVO) ---
+        document.getElementById('register-form').addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            const registerUser = document.getElementById('register-user').value.trim();
+            const registerPass = document.getElementById('register-pass').value;
+            const registerPassConfirm = document.getElementById('register-pass-confirm').value;
+
+            if (!registerUser || !registerPass) {
+                alert('Completa usuario y clave.');
+                return;
+            }
+
+            if (registerPass.length < 4) {
+                alert('La clave debe tener al menos 4 caracteres.');
+                return;
+            }
+
+            if (registerPass !== registerPassConfirm) {
+                alert('Las claves no coinciden.');
+                return;
+            }
+
+            const registerAttempt = await tryUserRegisterRemote(registerUser, registerPass, thisPC);
+            if (!registerAttempt.ok) {
+                if (registerAttempt.validationFailed) {
+                    alert(registerAttempt.message || 'No se pudo completar el registro.');
+                    return;
+                }
+                alert('No se pudo conectar al servidor de registro. Verifica que el backend esté activo.');
+                return;
+            }
+
+            const saved = persistUserSessionLocal(registerAttempt.payload || {});
+            if (!saved) {
+                alert('Registro completado, pero no se pudo crear la sesión local.');
+                return;
+            }
+
+            alert('Registro exitoso. Bienvenido, ' + registerUser);
+            window.location.href = "foro.html";
+        });
+</script>
+
+</body>
+</html>
