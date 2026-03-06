@@ -43,7 +43,7 @@ for module_name, driver_name in (
 
 app = FastAPI()
 
-BASE_DIR = Path(__file__).resolve().parents[1]
+BASE_DIR = Path(__file__).resolve().parents[2]  # api/backend/main.py → up 2 levels → aldlasforo/
 ASSETS_DIR = BASE_DIR / "assets"
 UPLOADS_DIR = ASSETS_DIR / "uploads"
 IMAGES_DIR = UPLOADS_DIR / "images"
