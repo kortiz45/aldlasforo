@@ -1,5 +1,11 @@
 {
-    "rewrites": [
-        { "source": "/(.*)", "destination": "/aldlasforo/api/index.py" }
+    "builds": [
+        {
+            "src": "aldlasforo/api/index.py",
+            "use": "@vercel/python"
+        }
+    ],
+    "routes": [
+        { "src": "/(.*)", "dest": "/aldlasforo/api/index.py" }
     ]
 }
