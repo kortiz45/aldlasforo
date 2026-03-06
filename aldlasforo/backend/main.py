@@ -51,6 +51,8 @@ VIDEOS_DIR = UPLOADS_DIR / "videos"
 # Use /tmp for temporary uploads in Vercel/serverless environments
 TMP_UPLOADS_DIR = Path("/tmp") / "uploads"
 DATA_DIR = BASE_DIR / "data"
+# Writable data directory: /tmp/data is used on read-only filesystems (e.g. Vercel)
+TMP_DATA_DIR = Path("/tmp") / "data"
 VIP_PAYMENT_QR_FILE = DATA_DIR / "vip-payment-qr.json"
 USERS_FILE = DATA_DIR / "users.json"
 WALLETS_FILE = DATA_DIR / "wallets.json"
@@ -64,9 +66,13 @@ MEDIA_PUBLIC_BASE_URL = (
 MEDIA_STORAGE_MODE = os.getenv("MEDIA_STORAGE_MODE", "local").strip().lower() or "local"
 
 # Only /tmp is writable in Vercel. Never attempt to create local static directories.
-# Always ensure /tmp/uploads exists (this is the ONLY directory creation allowed)
+# Always ensure /tmp/uploads and /tmp/data exist (only writable directories allowed)
 try:
     TMP_UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+except (OSError, PermissionError):
+    pass
+try:
+    TMP_DATA_DIR.mkdir(parents=True, exist_ok=True)
 except (OSError, PermissionError):
     pass
 
@@ -443,6 +449,37 @@ def _to_optional_str(val: object) -> Optional[str]:
     return s if s else None
 
 
+def _writable_data_file(name: str) -> Path:
+    """Return the writable path for a JSON data file.
+
+    On read-only filesystems (e.g. Vercel), the deployed data/ directory cannot
+    be written to.  In that case we use /tmp/data/ which is always writable.
+    """
+    candidate = TMP_DATA_DIR / name
+    if candidate.exists():
+        return candidate
+    # Check if the original data dir is writable
+    original = DATA_DIR / name
+    try:
+        test = DATA_DIR / ".write_check"
+        test.touch()
+        test.unlink(missing_ok=True)
+        return original
+    except (OSError, PermissionError):
+        return candidate
+
+
+def _readable_data_file(name: str) -> Path:
+    """Return the best path to read a JSON data file.
+
+    Prefer /tmp/data/ (holds recent writes) over the deployed data/ directory.
+    """
+    tmp_candidate = TMP_DATA_DIR / name
+    if tmp_candidate.exists():
+        return tmp_candidate
+    return DATA_DIR / name
+
+
 def _require_postgres_enabled() -> None:
     if not _is_postgres_enabled():
         raise HTTPException(
@@ -572,10 +609,11 @@ def _load_users_store() -> list[dict]:
         return clean
     # JSON file fallback when Postgres is unavailable
     with _users_file_lock:
-        if not USERS_FILE.exists():
+        read_path = _readable_data_file("users.json")
+        if not read_path.exists():
             return []
         try:
-            with USERS_FILE.open("r", encoding="utf-8") as src:
+            with read_path.open("r", encoding="utf-8") as src:
                 data = json.load(src)
         except Exception:
             return []
@@ -676,10 +714,11 @@ def _save_users_store(users: list[dict]) -> None:
         return
     # JSON file fallback
     with _users_file_lock:
-        tmp_path = USERS_FILE.with_suffix(".tmp")
+        write_path = _writable_data_file("users.json")
+        tmp_path = write_path.with_suffix(".tmp")
         with tmp_path.open("w", encoding="utf-8") as dst:
             json.dump(clean_users, dst, ensure_ascii=True, indent=2)
-        tmp_path.replace(USERS_FILE)
+        tmp_path.replace(write_path)
 
 
 def _load_wallets_store_unlocked() -> dict[str, int]:
@@ -698,10 +737,11 @@ def _load_wallets_store_unlocked() -> dict[str, int]:
         return clean
     # JSON file fallback
     with _wallets_file_lock:
-        if not WALLETS_FILE.exists():
+        read_path = _readable_data_file("wallets.json")
+        if not read_path.exists():
             return {}
         try:
-            with WALLETS_FILE.open("r", encoding="utf-8") as src:
+            with read_path.open("r", encoding="utf-8") as src:
                 data = json.load(src)
         except Exception:
             return {}
@@ -762,10 +802,11 @@ def _save_wallets_store_unlocked(wallets: dict[str, int]) -> None:
             value = 0
         payload[username] = max(0, value)
     with _wallets_file_lock:
-        tmp_path = WALLETS_FILE.with_suffix(".tmp")
+        write_path = _writable_data_file("wallets.json")
+        tmp_path = write_path.with_suffix(".tmp")
         with tmp_path.open("w", encoding="utf-8") as dst:
             json.dump(payload, dst, ensure_ascii=True, indent=2)
-        tmp_path.replace(WALLETS_FILE)
+        tmp_path.replace(write_path)
 
 
 def _load_wallets_store() -> dict[str, int]:
@@ -821,10 +862,11 @@ def _wallet_apply_delta(username: str, delta: int, *, require_sufficient: bool =
             except Exception:
                 v = 0
             payload[u] = max(0, v)
-        tmp_path = WALLETS_FILE.with_suffix(".tmp")
+        write_path = _writable_data_file("wallets.json")
+        tmp_path = write_path.with_suffix(".tmp")
         with tmp_path.open("w", encoding="utf-8") as dst:
             json.dump(payload, dst, ensure_ascii=True, indent=2)
-        tmp_path.replace(WALLETS_FILE)
+        tmp_path.replace(write_path)
     return current, next_balance
 
 
@@ -959,10 +1001,11 @@ def _load_gifts_store() -> list[dict]:
         return clean
     # JSON file fallback
     with _gifts_file_lock:
-        if not GIFTS_FILE.exists():
+        read_path = _readable_data_file("gifts.json")
+        if not read_path.exists():
             return []
         try:
-            with GIFTS_FILE.open("r", encoding="utf-8") as src:
+            with read_path.open("r", encoding="utf-8") as src:
                 data = json.load(src)
         except Exception:
             return []
@@ -1028,10 +1071,11 @@ def _save_gifts_store(gifts: list[dict]) -> None:
         return
     # JSON file fallback
     with _gifts_file_lock:
-        tmp_path = GIFTS_FILE.with_suffix(".tmp")
+        write_path = _writable_data_file("gifts.json")
+        tmp_path = write_path.with_suffix(".tmp")
         with tmp_path.open("w", encoding="utf-8") as dst:
             json.dump(payload, dst, ensure_ascii=True, indent=2)
-        tmp_path.replace(GIFTS_FILE)
+        tmp_path.replace(write_path)
 
 
 def _find_gift_by_code(gifts: list[dict], code: str) -> Optional[dict]:
@@ -1125,10 +1169,11 @@ def _load_settings_store() -> dict:
         return _sanitize_settings_store(data if isinstance(data, dict) else {})
     # JSON file fallback
     with _settings_file_lock:
-        if not SETTINGS_FILE.exists():
+        read_path = _readable_data_file("settings.json")
+        if not read_path.exists():
             return _default_settings_store()
         try:
-            with SETTINGS_FILE.open("r", encoding="utf-8") as src:
+            with read_path.open("r", encoding="utf-8") as src:
                 data = json.load(src)
         except Exception:
             return _default_settings_store()
@@ -1150,10 +1195,11 @@ def _save_settings_store(settings: dict) -> dict:
         return clean
     # JSON file fallback
     with _settings_file_lock:
-        tmp_path = SETTINGS_FILE.with_suffix(".tmp")
+        write_path = _writable_data_file("settings.json")
+        tmp_path = write_path.with_suffix(".tmp")
         with tmp_path.open("w", encoding="utf-8") as dst:
             json.dump(clean, dst, ensure_ascii=True, indent=2)
-        tmp_path.replace(SETTINGS_FILE)
+        tmp_path.replace(write_path)
     return clean
 
 
@@ -1483,10 +1529,24 @@ def is_valid_payment_qr_url(value: str) -> bool:
 
 
 def load_vip_payment_qr_map() -> dict:
-    row = _db_fetchone("SELECT value FROM settings WHERE key = %s", ("vip_payment_qr",))
-    data = row.get("value") if row else {}
-    if not isinstance(data, dict):
-        data = {}
+    if _is_postgres_enabled():
+        row = _db_fetchone("SELECT value FROM settings WHERE key = %s", ("vip_payment_qr",))
+        data = row.get("value") if row else {}
+        if not isinstance(data, dict):
+            data = {}
+    else:
+        # JSON file fallback
+        try:
+            read_path = _readable_data_file("vip-payment-qr.json")
+            if read_path.exists():
+                with read_path.open("r", encoding="utf-8") as src:
+                    data = json.load(src)
+                if not isinstance(data, dict):
+                    data = {}
+            else:
+                data = {}
+        except Exception:
+            data = {}
     clean = {}
     for key in ("yape", "binance", "crypto"):
         value = data.get(key)
@@ -1501,15 +1561,23 @@ def save_vip_payment_qr_map(data: dict) -> dict:
         value = data.get(key)
         if isinstance(value, str) and value.strip():
             clean[key] = value.strip()
-    _db_execute(
-        """
-        INSERT INTO settings (key, value, updated_at)
-        VALUES (%s, %s::jsonb, NOW())
-        ON CONFLICT (key) DO UPDATE
-        SET value = EXCLUDED.value, updated_at = NOW();
-        """,
-        ("vip_payment_qr", json.dumps(clean, ensure_ascii=False)),
-    )
+    if _is_postgres_enabled():
+        _db_execute(
+            """
+            INSERT INTO settings (key, value, updated_at)
+            VALUES (%s, %s::jsonb, NOW())
+            ON CONFLICT (key) DO UPDATE
+            SET value = EXCLUDED.value, updated_at = NOW();
+            """,
+            ("vip_payment_qr", json.dumps(clean, ensure_ascii=False)),
+        )
+    else:
+        # JSON file fallback
+        write_path = _writable_data_file("vip-payment-qr.json")
+        tmp_path = write_path.with_suffix(".tmp")
+        with tmp_path.open("w", encoding="utf-8") as dst:
+            json.dump(clean, dst, ensure_ascii=True, indent=2)
+        tmp_path.replace(write_path)
     return clean
 
 
