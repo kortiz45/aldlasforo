@@ -579,34 +579,34 @@ def _load_users_store() -> list[dict]:
                 data = json.load(src)
         except Exception:
             return []
-    if not isinstance(data, list):
-        return []
-    clean = []
-    for raw in data:
-        if not isinstance(raw, dict):
-            continue
-        username = str(raw.get("username", "")).strip()
-        username_lower = _normalize_username(raw.get("username_lower") or username)
-        password_hash = str(raw.get("password_hash", "")).strip()
-        if not username or not username_lower or not password_hash:
-            continue
-        clean.append(
-            {
-                "username": username,
-                "username_lower": username_lower,
-                "password_hash": password_hash,
-                "role": _normalize_user_role(raw.get("role", "user")),
-                "plan": str(raw.get("plan", "free")).strip().lower() or "free",
-                "status": str(raw.get("status", "Activo")).strip() or "Activo",
-                "isVip": bool(raw.get("isVip", False)),
-                "expiryDate": _to_optional_str(raw.get("expiryDate")),
-                "deviceLock": _to_optional_str(raw.get("deviceLock")),
-                "dailyCreditsAt": _to_optional_str(raw.get("dailyCreditsAt")),
-                "createdAt": str(raw.get("createdAt", "")).strip() or datetime.now(timezone.utc).isoformat(),
-                "updatedAt": str(raw.get("updatedAt", "")).strip() or datetime.now(timezone.utc).isoformat(),
-            }
-        )
-    return clean
+        if not isinstance(data, list):
+            return []
+        clean = []
+        for raw in data:
+            if not isinstance(raw, dict):
+                continue
+            username = str(raw.get("username", "")).strip()
+            username_lower = _normalize_username(raw.get("username_lower") or username)
+            password_hash = str(raw.get("password_hash", "")).strip()
+            if not username or not username_lower or not password_hash:
+                continue
+            clean.append(
+                {
+                    "username": username,
+                    "username_lower": username_lower,
+                    "password_hash": password_hash,
+                    "role": _normalize_user_role(raw.get("role", "user")),
+                    "plan": str(raw.get("plan", "free")).strip().lower() or "free",
+                    "status": str(raw.get("status", "Activo")).strip() or "Activo",
+                    "isVip": bool(raw.get("isVip", False)),
+                    "expiryDate": _to_optional_str(raw.get("expiryDate")),
+                    "deviceLock": _to_optional_str(raw.get("deviceLock")),
+                    "dailyCreditsAt": _to_optional_str(raw.get("dailyCreditsAt")),
+                    "createdAt": str(raw.get("createdAt", "")).strip() or datetime.now(timezone.utc).isoformat(),
+                    "updatedAt": str(raw.get("updatedAt", "")).strip() or datetime.now(timezone.utc).isoformat(),
+                }
+            )
+        return clean
 
 
 def _save_users_store(users: list[dict]) -> None:
@@ -697,26 +697,27 @@ def _load_wallets_store_unlocked() -> dict[str, int]:
             clean[username] = max(0, value)
         return clean
     # JSON file fallback
-    if not WALLETS_FILE.exists():
-        return {}
-    try:
-        with WALLETS_FILE.open("r", encoding="utf-8") as src:
-            data = json.load(src)
-    except Exception:
-        return {}
-    if not isinstance(data, dict):
-        return {}
-    clean = {}
-    for raw_user, raw_balance in data.items():
-        username = _normalize_username(str(raw_user))
-        if not username:
-            continue
+    with _wallets_file_lock:
+        if not WALLETS_FILE.exists():
+            return {}
         try:
-            value = int(round(float(raw_balance)))
+            with WALLETS_FILE.open("r", encoding="utf-8") as src:
+                data = json.load(src)
         except Exception:
-            value = 0
-        clean[username] = max(0, value)
-    return clean
+            return {}
+        if not isinstance(data, dict):
+            return {}
+        clean = {}
+        for raw_user, raw_balance in data.items():
+            username = _normalize_username(str(raw_user))
+            if not username:
+                continue
+            try:
+                value = int(round(float(raw_balance)))
+            except Exception:
+                value = 0
+            clean[username] = max(0, value)
+        return clean
 
 
 def _save_wallets_store_unlocked(wallets: dict[str, int]) -> None:
@@ -965,14 +966,14 @@ def _load_gifts_store() -> list[dict]:
                 data = json.load(src)
         except Exception:
             return []
-    if not isinstance(data, list):
-        return []
-    clean = []
-    for raw in data:
-        normalized = _normalize_gift_entry(raw if isinstance(raw, dict) else {})
-        if normalized:
-            clean.append(normalized)
-    return clean
+        if not isinstance(data, list):
+            return []
+        clean = []
+        for raw in data:
+            normalized = _normalize_gift_entry(raw if isinstance(raw, dict) else {})
+            if normalized:
+                clean.append(normalized)
+        return clean
 
 
 def _save_gifts_store(gifts: list[dict]) -> None:
@@ -1131,7 +1132,7 @@ def _load_settings_store() -> dict:
                 data = json.load(src)
         except Exception:
             return _default_settings_store()
-    return _sanitize_settings_store(data if isinstance(data, dict) else {})
+        return _sanitize_settings_store(data if isinstance(data, dict) else {})
 
 
 def _save_settings_store(settings: dict) -> dict:
