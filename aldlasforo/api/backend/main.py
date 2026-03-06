@@ -12,15 +12,15 @@ import hmac
 import secrets
 import ssl
 from collections import defaultdict, deque
-from contextlib import closing
+from contextlib import asynccontextmanager, closing
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from threading import Lock
 from typing import Optional
 from urllib.parse import parse_qsl, quote, unquote, urlparse
 
+import base64
 import httpx
-from passlib.context import CryptContext
 from fastapi import Body, FastAPI, File, Form, HTTPException, Request, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
@@ -41,7 +41,13 @@ for module_name, driver_name in (
     except Exception:
         continue
 
-app = FastAPI()
+@asynccontextmanager
+async def _lifespan(app: FastAPI):
+    startup()
+    yield
+
+
+app = FastAPI(lifespan=_lifespan)
 
 BASE_DIR = Path(__file__).resolve().parents[2]  # api/backend/main.py → up 2 levels → aldlasforo/
 ASSETS_DIR = BASE_DIR / "assets"
@@ -222,7 +228,51 @@ _admin_sessions: dict[str, dict[str, float | str]] = {}
 _login_failures: dict[str, deque[float]] = defaultdict(deque)
 _user_sessions: dict[str, dict[str, float | str]] = {}
 _user_login_failures: dict[str, deque[float]] = defaultdict(deque)
-_password_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
+
+
+def _ab64_encode(data: bytes) -> str:
+    """Passlib 'adapted base64': standard base64 with '+' → '.', no padding.
+    Used to produce/parse hashes in passlib-compatible $pbkdf2-sha256$ format."""
+    return base64.b64encode(data).decode("ascii").rstrip("=").replace("+", ".")
+
+
+def _ab64_decode(s: str) -> bytes:
+    """Decode passlib 'adapted base64' ('+' encoded as '.', no padding)."""
+    s = s.replace(".", "+")
+    pad = (4 - len(s) % 4) % 4
+    return base64.b64decode(s + "=" * pad)
+
+
+# 29000 matches passlib's default rounds for pbkdf2_sha256; keeps new hashes
+# compatible with any existing stored hashes created by the previous passlib code.
+_PBKDF2_ROUNDS = 29000
+# Pre-compiled pattern for $pbkdf2-sha256$<rounds>$<salt>$<checksum>
+_PBKDF2_HASH_RE = re.compile(r"\$pbkdf2-sha256\$(\d+)\$([^$]+)\$([^$]+)")
+
+
+def _hash_password(password: str) -> str:
+    """Hash a password using PBKDF2-SHA256 in passlib-compatible $pbkdf2-sha256$ format."""
+    salt = secrets.token_bytes(16)
+    dk = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, _PBKDF2_ROUNDS)
+    return f"$pbkdf2-sha256${_PBKDF2_ROUNDS}${_ab64_encode(salt)}${_ab64_encode(dk)}"
+
+
+def _verify_password(password: str, password_hash: str) -> bool:
+    """Verify a password against a PBKDF2-SHA256 hash (passlib-compatible).
+    Accepts hashes produced by both _hash_password and the old passlib code."""
+    try:
+        m = _PBKDF2_HASH_RE.fullmatch(password_hash)
+        if not m:
+            return False
+        rounds = int(m.group(1))
+        salt = _ab64_decode(m.group(2))
+        expected = _ab64_decode(m.group(3))
+        dk = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, rounds)
+        return hmac.compare_digest(dk, expected)
+    except Exception:
+        return False
+
+
 _tx_log_entries: deque[dict] = deque(maxlen=max(1000, int(os.getenv("TX_LOG_MAX_ENTRIES", "5000"))))
 _tx_log_lock = Lock()
 _users_file_lock = Lock()
@@ -1676,7 +1726,6 @@ def move_to_local_storage(*, temp_path: Path, object_name: str, media_kind: str)
         )
 
 
-@app.on_event("startup")
 def startup() -> None:
     if not _is_postgres_enabled():
         print("[startup] warning: DATABASE_URL missing or postgres driver unavailable; DB endpoints will return 503")
@@ -1975,7 +2024,7 @@ def user_register(request: Request, response: Response, payload: dict = Body(...
     user = {
         "username": raw_username,
         "username_lower": _normalize_username(raw_username),
-        "password_hash": _password_context.hash(password),
+        "password_hash": _hash_password(password),
         "role": "user",
         "plan": "free",
         "status": "Activo",
@@ -2024,7 +2073,7 @@ def user_login(request: Request, response: Response, payload: dict = Body(...)):
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
     try:
-        valid_password = _password_context.verify(password, str(user.get("password_hash", "")))
+        valid_password = _verify_password(password, str(user.get("password_hash", "")))
     except Exception:
         valid_password = False
     if not valid_password:
@@ -2136,7 +2185,7 @@ def admin_create_user(request: Request, payload: dict = Body(...)):
     user = {
         "username": raw_username,
         "username_lower": _normalize_username(raw_username),
-        "password_hash": _password_context.hash(password),
+        "password_hash": _hash_password(password),
         "role": role,
         "plan": plan,
         "status": "VIP" if is_vip else status,
