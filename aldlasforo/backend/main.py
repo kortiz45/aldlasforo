@@ -208,6 +208,10 @@ _user_login_failures: dict[str, deque[float]] = defaultdict(deque)
 _password_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
 _tx_log_entries: deque[dict] = deque(maxlen=max(1000, int(os.getenv("TX_LOG_MAX_ENTRIES", "5000"))))
 _tx_log_lock = Lock()
+_users_file_lock = Lock()
+_wallets_file_lock = Lock()
+_gifts_file_lock = Lock()
+_settings_file_lock = Lock()
 
 
 @app.middleware("http")
@@ -431,6 +435,14 @@ def _normalize_user_role(value: str) -> str:
     return role if role in ALLOWED_USER_ROLES else "user"
 
 
+def _to_optional_str(val: object) -> Optional[str]:
+    """Return stripped string or None, correctly handling Python None values."""
+    if val is None:
+        return None
+    s = str(val).strip()
+    return s if s else None
+
+
 def _require_postgres_enabled() -> None:
     if not _is_postgres_enabled():
         raise HTTPException(
@@ -462,7 +474,8 @@ def _db_execute(sql: str, params: tuple = ()) -> None:
 
 
 def ensure_app_tables() -> None:
-    _require_postgres_enabled()
+    if not _is_postgres_enabled():
+        return
     ddl = """
     CREATE TABLE IF NOT EXISTS users (
         username TEXT PRIMARY KEY,
@@ -511,27 +524,65 @@ def ensure_app_tables() -> None:
 
 
 def _load_users_store() -> list[dict]:
-    rows = _db_fetchall(
-        """
-        SELECT
-            username,
-            username_lower,
-            password_hash,
-            role,
-            plan,
-            status,
-            is_vip,
-            expiry_date,
-            device_lock,
-            daily_credits_at,
-            created_at,
-            updated_at
-        FROM users
-        ORDER BY username_lower ASC;
-        """
-    )
-    clean: list[dict] = []
-    for raw in rows:
+    if _is_postgres_enabled():
+        rows = _db_fetchall(
+            """
+            SELECT
+                username,
+                username_lower,
+                password_hash,
+                role,
+                plan,
+                status,
+                is_vip,
+                expiry_date,
+                device_lock,
+                daily_credits_at,
+                created_at,
+                updated_at
+            FROM users
+            ORDER BY username_lower ASC;
+            """
+        )
+        clean: list[dict] = []
+        for raw in rows:
+            if not isinstance(raw, dict):
+                continue
+            username = str(raw.get("username", "")).strip()
+            username_lower = _normalize_username(raw.get("username_lower") or username)
+            password_hash = str(raw.get("password_hash", "")).strip()
+            if not username or not username_lower or not password_hash:
+                continue
+            clean.append(
+                {
+                    "username": username,
+                    "username_lower": username_lower,
+                    "password_hash": password_hash,
+                    "role": _normalize_user_role(raw.get("role", "user")),
+                    "plan": str(raw.get("plan", "free")).strip().lower() or "free",
+                    "status": str(raw.get("status", "Activo")).strip() or "Activo",
+                    "isVip": bool(raw.get("is_vip", False)),
+                    "expiryDate": _to_optional_str(raw.get("expiry_date")),
+                    "deviceLock": _to_optional_str(raw.get("device_lock")),
+                    "dailyCreditsAt": _to_optional_str(raw.get("daily_credits_at")),
+                    "createdAt": str(raw.get("created_at", "")).strip() or datetime.now(timezone.utc).isoformat(),
+                    "updatedAt": str(raw.get("updated_at", "")).strip() or datetime.now(timezone.utc).isoformat(),
+                }
+            )
+        return clean
+    # JSON file fallback when Postgres is unavailable
+    with _users_file_lock:
+        if not USERS_FILE.exists():
+            return []
+        try:
+            with USERS_FILE.open("r", encoding="utf-8") as src:
+                data = json.load(src)
+        except Exception:
+            return []
+    if not isinstance(data, list):
+        return []
+    clean = []
+    for raw in data:
         if not isinstance(raw, dict):
             continue
         username = str(raw.get("username", "")).strip()
@@ -547,12 +598,12 @@ def _load_users_store() -> list[dict]:
                 "role": _normalize_user_role(raw.get("role", "user")),
                 "plan": str(raw.get("plan", "free")).strip().lower() or "free",
                 "status": str(raw.get("status", "Activo")).strip() or "Activo",
-                "isVip": bool(raw.get("is_vip", False)),
-                "expiryDate": str(raw.get("expiry_date", "")).strip() or None,
-                "deviceLock": str(raw.get("device_lock", "")).strip() or None,
-                "dailyCreditsAt": str(raw.get("daily_credits_at", "")).strip() or None,
-                "createdAt": str(raw.get("created_at", "")).strip() or datetime.now(timezone.utc).isoformat(),
-                "updatedAt": str(raw.get("updated_at", "")).strip() or datetime.now(timezone.utc).isoformat(),
+                "isVip": bool(raw.get("isVip", False)),
+                "expiryDate": _to_optional_str(raw.get("expiryDate")),
+                "deviceLock": _to_optional_str(raw.get("deviceLock")),
+                "dailyCreditsAt": _to_optional_str(raw.get("dailyCreditsAt")),
+                "createdAt": str(raw.get("createdAt", "")).strip() or datetime.now(timezone.utc).isoformat(),
+                "updatedAt": str(raw.get("updatedAt", "")).strip() or datetime.now(timezone.utc).isoformat(),
             }
         )
     return clean
@@ -560,78 +611,108 @@ def _load_users_store() -> list[dict]:
 
 def _save_users_store(users: list[dict]) -> None:
     clean_users = [u for u in users if isinstance(u, dict)]
-    with _connect_postgres() as conn:
-        with closing(conn.cursor()) as cur:
-            usernames = [_normalize_username(u.get("username_lower") or u.get("username", "")) for u in clean_users]
-            usernames = [u for u in usernames if u]
-            if usernames:
-                placeholders = ", ".join(["%s"] * len(usernames))
-                cur.execute(f"DELETE FROM users WHERE username_lower NOT IN ({placeholders})", tuple(usernames))
-            else:
-                cur.execute("DELETE FROM users")
+    if _is_postgres_enabled():
+        with _connect_postgres() as conn:
+            with closing(conn.cursor()) as cur:
+                usernames = [_normalize_username(u.get("username_lower") or u.get("username", "")) for u in clean_users]
+                usernames = [u for u in usernames if u]
+                if usernames:
+                    placeholders = ", ".join(["%s"] * len(usernames))
+                    cur.execute(f"DELETE FROM users WHERE username_lower NOT IN ({placeholders})", tuple(usernames))
+                else:
+                    cur.execute("DELETE FROM users")
 
-            upsert_sql = """
-            INSERT INTO users (
-                username,
-                username_lower,
-                password_hash,
-                role,
-                plan,
-                status,
-                is_vip,
-                expiry_date,
-                device_lock,
-                daily_credits_at,
-                created_at,
-                updated_at
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            ON CONFLICT (username_lower) DO UPDATE SET
-                username = EXCLUDED.username,
-                password_hash = EXCLUDED.password_hash,
-                role = EXCLUDED.role,
-                plan = EXCLUDED.plan,
-                status = EXCLUDED.status,
-                is_vip = EXCLUDED.is_vip,
-                expiry_date = EXCLUDED.expiry_date,
-                device_lock = EXCLUDED.device_lock,
-                daily_credits_at = EXCLUDED.daily_credits_at,
-                created_at = EXCLUDED.created_at,
-                updated_at = EXCLUDED.updated_at;
-            """
-            for raw in clean_users:
-                username = str(raw.get("username", "")).strip()
-                username_lower = _normalize_username(raw.get("username_lower") or username)
-                password_hash = str(raw.get("password_hash", "")).strip()
-                if not username or not username_lower or not password_hash:
-                    continue
-                cur.execute(
-                    upsert_sql,
-                    (
-                        username,
-                        username_lower,
-                        password_hash,
-                        _normalize_user_role(raw.get("role", "user")),
-                        str(raw.get("plan", "free")).strip().lower() or "free",
-                        str(raw.get("status", "Activo")).strip() or "Activo",
-                        bool(raw.get("isVip", False)),
-                        str(raw.get("expiryDate", "")).strip() or None,
-                        str(raw.get("deviceLock", "")).strip() or None,
-                        str(raw.get("dailyCreditsAt", "")).strip() or None,
-                        str(raw.get("createdAt", "")).strip() or datetime.now(timezone.utc).isoformat(),
-                        str(raw.get("updatedAt", "")).strip() or datetime.now(timezone.utc).isoformat(),
-                    ),
-                )
+                upsert_sql = """
+                INSERT INTO users (
+                    username,
+                    username_lower,
+                    password_hash,
+                    role,
+                    plan,
+                    status,
+                    is_vip,
+                    expiry_date,
+                    device_lock,
+                    daily_credits_at,
+                    created_at,
+                    updated_at
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (username_lower) DO UPDATE SET
+                    username = EXCLUDED.username,
+                    password_hash = EXCLUDED.password_hash,
+                    role = EXCLUDED.role,
+                    plan = EXCLUDED.plan,
+                    status = EXCLUDED.status,
+                    is_vip = EXCLUDED.is_vip,
+                    expiry_date = EXCLUDED.expiry_date,
+                    device_lock = EXCLUDED.device_lock,
+                    daily_credits_at = EXCLUDED.daily_credits_at,
+                    created_at = EXCLUDED.created_at,
+                    updated_at = EXCLUDED.updated_at;
+                """
+                for raw in clean_users:
+                    username = str(raw.get("username", "")).strip()
+                    username_lower = _normalize_username(raw.get("username_lower") or username)
+                    password_hash = str(raw.get("password_hash", "")).strip()
+                    if not username or not username_lower or not password_hash:
+                        continue
+                    cur.execute(
+                        upsert_sql,
+                        (
+                            username,
+                            username_lower,
+                            password_hash,
+                            _normalize_user_role(raw.get("role", "user")),
+                            str(raw.get("plan", "free")).strip().lower() or "free",
+                            str(raw.get("status", "Activo")).strip() or "Activo",
+                            bool(raw.get("isVip", False)),
+                            _to_optional_str(raw.get("expiryDate")),
+                            _to_optional_str(raw.get("deviceLock")),
+                            _to_optional_str(raw.get("dailyCreditsAt")),
+                            str(raw.get("createdAt", "")).strip() or datetime.now(timezone.utc).isoformat(),
+                            str(raw.get("updatedAt", "")).strip() or datetime.now(timezone.utc).isoformat(),
+                        ),
+                    )
+        return
+    # JSON file fallback
+    with _users_file_lock:
+        tmp_path = USERS_FILE.with_suffix(".tmp")
+        with tmp_path.open("w", encoding="utf-8") as dst:
+            json.dump(clean_users, dst, ensure_ascii=True, indent=2)
+        tmp_path.replace(USERS_FILE)
 
 
 def _load_wallets_store_unlocked() -> dict[str, int]:
-    rows = _db_fetchall("SELECT username_lower, balance FROM wallets")
-    clean: dict[str, int] = {}
-    for row in rows:
-        username = _normalize_username(str(row.get("username_lower", "")))
+    if _is_postgres_enabled():
+        rows = _db_fetchall("SELECT username_lower, balance FROM wallets")
+        clean: dict[str, int] = {}
+        for row in rows:
+            username = _normalize_username(str(row.get("username_lower", "")))
+            if not username:
+                continue
+            try:
+                value = int(round(float(row.get("balance", 0))))
+            except Exception:
+                value = 0
+            clean[username] = max(0, value)
+        return clean
+    # JSON file fallback
+    if not WALLETS_FILE.exists():
+        return {}
+    try:
+        with WALLETS_FILE.open("r", encoding="utf-8") as src:
+            data = json.load(src)
+    except Exception:
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    clean = {}
+    for raw_user, raw_balance in data.items():
+        username = _normalize_username(str(raw_user))
         if not username:
             continue
         try:
-            value = int(round(float(row.get("balance", 0))))
+            value = int(round(float(raw_balance)))
         except Exception:
             value = 0
         clean[username] = max(0, value)
@@ -639,33 +720,51 @@ def _load_wallets_store_unlocked() -> dict[str, int]:
 
 
 def _save_wallets_store_unlocked(wallets: dict[str, int]) -> None:
-    with _connect_postgres() as conn:
-        with closing(conn.cursor()) as cur:
-            usernames = [_normalize_username(str(u)) for u in wallets.keys()]
-            usernames = [u for u in usernames if u]
-            if usernames:
-                placeholders = ", ".join(["%s"] * len(usernames))
-                cur.execute(f"DELETE FROM wallets WHERE username_lower NOT IN ({placeholders})", tuple(usernames))
-            else:
-                cur.execute("DELETE FROM wallets")
+    if _is_postgres_enabled():
+        with _connect_postgres() as conn:
+            with closing(conn.cursor()) as cur:
+                usernames = [_normalize_username(str(u)) for u in wallets.keys()]
+                usernames = [u for u in usernames if u]
+                if usernames:
+                    placeholders = ", ".join(["%s"] * len(usernames))
+                    cur.execute(f"DELETE FROM wallets WHERE username_lower NOT IN ({placeholders})", tuple(usernames))
+                else:
+                    cur.execute("DELETE FROM wallets")
 
-            for raw_user, raw_balance in wallets.items():
-                username = _normalize_username(str(raw_user))
-                if not username:
-                    continue
-                try:
-                    value = int(round(float(raw_balance)))
-                except Exception:
-                    value = 0
-                cur.execute(
-                    """
-                    INSERT INTO wallets (username_lower, balance, updated_at)
-                    VALUES (%s, %s, NOW())
-                    ON CONFLICT (username_lower) DO UPDATE
-                    SET balance = EXCLUDED.balance, updated_at = NOW();
-                    """,
-                    (username, max(0, value)),
-                )
+                for raw_user, raw_balance in wallets.items():
+                    username = _normalize_username(str(raw_user))
+                    if not username:
+                        continue
+                    try:
+                        value = int(round(float(raw_balance)))
+                    except Exception:
+                        value = 0
+                    cur.execute(
+                        """
+                        INSERT INTO wallets (username_lower, balance, updated_at)
+                        VALUES (%s, %s, NOW())
+                        ON CONFLICT (username_lower) DO UPDATE
+                        SET balance = EXCLUDED.balance, updated_at = NOW();
+                        """,
+                        (username, max(0, value)),
+                    )
+        return
+    # JSON file fallback
+    payload: dict[str, int] = {}
+    for raw_user, raw_balance in wallets.items():
+        username = _normalize_username(str(raw_user))
+        if not username:
+            continue
+        try:
+            value = int(round(float(raw_balance)))
+        except Exception:
+            value = 0
+        payload[username] = max(0, value)
+    with _wallets_file_lock:
+        tmp_path = WALLETS_FILE.with_suffix(".tmp")
+        with tmp_path.open("w", encoding="utf-8") as dst:
+            json.dump(payload, dst, ensure_ascii=True, indent=2)
+        tmp_path.replace(WALLETS_FILE)
 
 
 def _load_wallets_store() -> dict[str, int]:
@@ -682,24 +781,49 @@ def _wallet_apply_delta(username: str, delta: int, *, require_sufficient: bool =
         raise HTTPException(status_code=400, detail="Invalid username")
 
     safe_delta = int(round(float(delta)))
-    with _connect_postgres() as conn:
-        with closing(conn.cursor()) as cur:
-            cur.execute("SELECT balance FROM wallets WHERE username_lower = %s FOR UPDATE", (normalized,))
-            row = cur.fetchone()
-            current = max(0, int(row[0])) if row else 0
-            next_balance = current + safe_delta
-            if require_sufficient and next_balance < 0:
-                raise HTTPException(status_code=409, detail="Insufficient credits")
-            next_balance = max(0, next_balance)
-            cur.execute(
-                """
-                INSERT INTO wallets (username_lower, balance, updated_at)
-                VALUES (%s, %s, NOW())
-                ON CONFLICT (username_lower) DO UPDATE
-                SET balance = EXCLUDED.balance, updated_at = NOW();
-                """,
-                (normalized, next_balance),
-            )
+    if _is_postgres_enabled():
+        with _connect_postgres() as conn:
+            with closing(conn.cursor()) as cur:
+                cur.execute("SELECT balance FROM wallets WHERE username_lower = %s FOR UPDATE", (normalized,))
+                row = cur.fetchone()
+                current = max(0, int(row[0])) if row else 0
+                next_balance = current + safe_delta
+                if require_sufficient and next_balance < 0:
+                    raise HTTPException(status_code=409, detail="Insufficient credits")
+                next_balance = max(0, next_balance)
+                cur.execute(
+                    """
+                    INSERT INTO wallets (username_lower, balance, updated_at)
+                    VALUES (%s, %s, NOW())
+                    ON CONFLICT (username_lower) DO UPDATE
+                    SET balance = EXCLUDED.balance, updated_at = NOW();
+                    """,
+                    (normalized, next_balance),
+                )
+        return current, next_balance
+    # JSON file fallback with lock for thread safety
+    with _wallets_file_lock:
+        wallets = _load_wallets_store_unlocked()
+        current = max(0, int(wallets.get(normalized, 0)))
+        next_balance = current + safe_delta
+        if require_sufficient and next_balance < 0:
+            raise HTTPException(status_code=409, detail="Insufficient credits")
+        next_balance = max(0, next_balance)
+        wallets[normalized] = next_balance
+        payload: dict[str, int] = {}
+        for raw_user, raw_balance in wallets.items():
+            u = _normalize_username(str(raw_user))
+            if not u:
+                continue
+            try:
+                v = int(round(float(raw_balance)))
+            except Exception:
+                v = 0
+            payload[u] = max(0, v)
+        tmp_path = WALLETS_FILE.with_suffix(".tmp")
+        with tmp_path.open("w", encoding="utf-8") as dst:
+            json.dump(payload, dst, ensure_ascii=True, indent=2)
+        tmp_path.replace(WALLETS_FILE)
     return current, next_balance
 
 
@@ -798,54 +922,10 @@ def _normalize_gift_entry(raw: dict) -> Optional[dict]:
 
 
 def _load_gifts_store() -> list[dict]:
-    rows = _db_fetchall(
-        """
-        SELECT
-            code,
-            kind,
-            plan,
-            days,
-            credits,
-            status,
-            created_at,
-            used_at,
-            used_by
-        FROM gifts
-        ORDER BY created_at DESC;
-        """
-    )
-    clean: list[dict] = []
-    for row in rows:
-        raw = {
-            "code": row.get("code", ""),
-            "kind": row.get("kind", ""),
-            "plan": row.get("plan", "vip"),
-            "days": row.get("days", 30),
-            "credits": row.get("credits", 0),
-            "status": row.get("status", "active"),
-            "createdAt": str(row.get("created_at", "")),
-            "usedAt": str(row.get("used_at", "")) if row.get("used_at") else "",
-            "usedBy": row.get("used_by", "") or "",
-        }
-        normalized = _normalize_gift_entry(raw)
-        if normalized:
-            clean.append(normalized)
-    return clean
-
-
-def _save_gifts_store(gifts: list[dict]) -> None:
-    payload = [g for g in (_normalize_gift_entry(item) for item in gifts) if g]
-    with _connect_postgres() as conn:
-        with closing(conn.cursor()) as cur:
-            codes = [str(g.get("code", "")).upper() for g in payload if str(g.get("code", "")).strip()]
-            if codes:
-                placeholders = ", ".join(["%s"] * len(codes))
-                cur.execute(f"DELETE FROM gifts WHERE UPPER(code) NOT IN ({placeholders})", tuple(codes))
-            else:
-                cur.execute("DELETE FROM gifts")
-
-            upsert_sql = """
-            INSERT INTO gifts (
+    if _is_postgres_enabled():
+        rows = _db_fetchall(
+            """
+            SELECT
                 code,
                 kind,
                 plan,
@@ -855,32 +935,102 @@ def _save_gifts_store(gifts: list[dict]) -> None:
                 created_at,
                 used_at,
                 used_by
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-            ON CONFLICT (code) DO UPDATE SET
-                kind = EXCLUDED.kind,
-                plan = EXCLUDED.plan,
-                days = EXCLUDED.days,
-                credits = EXCLUDED.credits,
-                status = EXCLUDED.status,
-                created_at = EXCLUDED.created_at,
-                used_at = EXCLUDED.used_at,
-                used_by = EXCLUDED.used_by;
+            FROM gifts
+            ORDER BY created_at DESC;
             """
-            for gift in payload:
-                cur.execute(
-                    upsert_sql,
-                    (
-                        str(gift.get("code", "")).upper(),
-                        str(gift.get("kind", "credits")).lower(),
-                        str(gift.get("plan", "vip")).lower(),
-                        int(gift.get("days", 30) or 30),
-                        int(gift.get("credits", 0) or 0),
-                        str(gift.get("status", "active")).lower(),
-                        str(gift.get("createdAt", "")).strip() or datetime.now(timezone.utc).isoformat(),
-                        str(gift.get("usedAt", "")).strip() or None,
-                        _normalize_username(gift.get("usedBy", "")) or None,
-                    ),
-                )
+        )
+        clean: list[dict] = []
+        for row in rows:
+            raw = {
+                "code": row.get("code", ""),
+                "kind": row.get("kind", ""),
+                "plan": row.get("plan", "vip"),
+                "days": row.get("days", 30),
+                "credits": row.get("credits", 0),
+                "status": row.get("status", "active"),
+                "createdAt": str(row.get("created_at", "")),
+                "usedAt": str(row.get("used_at", "")) if row.get("used_at") else "",
+                "usedBy": row.get("used_by", "") or "",
+            }
+            normalized = _normalize_gift_entry(raw)
+            if normalized:
+                clean.append(normalized)
+        return clean
+    # JSON file fallback
+    with _gifts_file_lock:
+        if not GIFTS_FILE.exists():
+            return []
+        try:
+            with GIFTS_FILE.open("r", encoding="utf-8") as src:
+                data = json.load(src)
+        except Exception:
+            return []
+    if not isinstance(data, list):
+        return []
+    clean = []
+    for raw in data:
+        normalized = _normalize_gift_entry(raw if isinstance(raw, dict) else {})
+        if normalized:
+            clean.append(normalized)
+    return clean
+
+
+def _save_gifts_store(gifts: list[dict]) -> None:
+    payload = [g for g in (_normalize_gift_entry(item) for item in gifts) if g]
+    if _is_postgres_enabled():
+        with _connect_postgres() as conn:
+            with closing(conn.cursor()) as cur:
+                codes = [str(g.get("code", "")).upper() for g in payload if str(g.get("code", "")).strip()]
+                if codes:
+                    placeholders = ", ".join(["%s"] * len(codes))
+                    cur.execute(f"DELETE FROM gifts WHERE UPPER(code) NOT IN ({placeholders})", tuple(codes))
+                else:
+                    cur.execute("DELETE FROM gifts")
+
+                upsert_sql = """
+                INSERT INTO gifts (
+                    code,
+                    kind,
+                    plan,
+                    days,
+                    credits,
+                    status,
+                    created_at,
+                    used_at,
+                    used_by
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (code) DO UPDATE SET
+                    kind = EXCLUDED.kind,
+                    plan = EXCLUDED.plan,
+                    days = EXCLUDED.days,
+                    credits = EXCLUDED.credits,
+                    status = EXCLUDED.status,
+                    created_at = EXCLUDED.created_at,
+                    used_at = EXCLUDED.used_at,
+                    used_by = EXCLUDED.used_by;
+                """
+                for gift in payload:
+                    cur.execute(
+                        upsert_sql,
+                        (
+                            str(gift.get("code", "")).upper(),
+                            str(gift.get("kind", "credits")).lower(),
+                            str(gift.get("plan", "vip")).lower(),
+                            int(gift.get("days", 30) or 30),
+                            int(gift.get("credits", 0) or 0),
+                            str(gift.get("status", "active")).lower(),
+                            str(gift.get("createdAt", "")).strip() or datetime.now(timezone.utc).isoformat(),
+                            str(gift.get("usedAt", "")).strip() or None,
+                            _normalize_username(gift.get("usedBy", "")) or None,
+                        ),
+                    )
+        return
+    # JSON file fallback
+    with _gifts_file_lock:
+        tmp_path = GIFTS_FILE.with_suffix(".tmp")
+        with tmp_path.open("w", encoding="utf-8") as dst:
+            json.dump(payload, dst, ensure_ascii=True, indent=2)
+        tmp_path.replace(GIFTS_FILE)
 
 
 def _find_gift_by_code(gifts: list[dict], code: str) -> Optional[dict]:
@@ -968,22 +1118,41 @@ def _sanitize_settings_store(raw: dict) -> dict:
 
 
 def _load_settings_store() -> dict:
-    row = _db_fetchone("SELECT value FROM settings WHERE key = %s", ("global",))
-    data = row.get("value") if row else {}
+    if _is_postgres_enabled():
+        row = _db_fetchone("SELECT value FROM settings WHERE key = %s", ("global",))
+        data = row.get("value") if row else {}
+        return _sanitize_settings_store(data if isinstance(data, dict) else {})
+    # JSON file fallback
+    with _settings_file_lock:
+        if not SETTINGS_FILE.exists():
+            return _default_settings_store()
+        try:
+            with SETTINGS_FILE.open("r", encoding="utf-8") as src:
+                data = json.load(src)
+        except Exception:
+            return _default_settings_store()
     return _sanitize_settings_store(data if isinstance(data, dict) else {})
 
 
 def _save_settings_store(settings: dict) -> dict:
     clean = _sanitize_settings_store(settings if isinstance(settings, dict) else {})
-    _db_execute(
-        """
-        INSERT INTO settings (key, value, updated_at)
-        VALUES (%s, %s::jsonb, NOW())
-        ON CONFLICT (key) DO UPDATE
-        SET value = EXCLUDED.value, updated_at = NOW();
-        """,
-        ("global", json.dumps(clean, ensure_ascii=False)),
-    )
+    if _is_postgres_enabled():
+        _db_execute(
+            """
+            INSERT INTO settings (key, value, updated_at)
+            VALUES (%s, %s::jsonb, NOW())
+            ON CONFLICT (key) DO UPDATE
+            SET value = EXCLUDED.value, updated_at = NOW();
+            """,
+            ("global", json.dumps(clean, ensure_ascii=False)),
+        )
+        return clean
+    # JSON file fallback
+    with _settings_file_lock:
+        tmp_path = SETTINGS_FILE.with_suffix(".tmp")
+        with tmp_path.open("w", encoding="utf-8") as dst:
+            json.dump(clean, dst, ensure_ascii=True, indent=2)
+        tmp_path.replace(SETTINGS_FILE)
     return clean
 
 
@@ -1037,8 +1206,8 @@ def _serialize_user_public(user: dict) -> dict:
         "status": status,
         "isVip": is_vip,
         "credits": balance,
-        "expiryDate": str(user.get("expiryDate", "")).strip() or None,
-        "deviceLocked": bool(str(user.get("deviceLock", "")).strip()),
+        "expiryDate": _to_optional_str(user.get("expiryDate")),
+        "deviceLocked": bool(user.get("deviceLock")),
         "createdAt": str(user.get("createdAt", "")).strip() or None,
         "updatedAt": str(user.get("updatedAt", "")).strip() or None,
     }
@@ -1896,7 +2065,7 @@ def admin_create_user(request: Request, payload: dict = Body(...)):
         "plan": plan,
         "status": "VIP" if is_vip else status,
         "isVip": is_vip,
-        "expiryDate": str(payload.get("expiryDate", "")).strip() or None,
+        "expiryDate": _to_optional_str(payload.get("expiryDate")),
         "deviceLock": None,
         "dailyCreditsAt": None,
         "createdAt": now_iso,
