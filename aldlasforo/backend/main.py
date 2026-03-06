@@ -76,6 +76,17 @@ try:
 except (OSError, PermissionError):
     pass
 
+# Detect at startup whether the deployed data/ directory is writable.
+# On Vercel the filesystem is read-only; only /tmp is writable.
+_DATA_DIR_WRITABLE: bool
+try:
+    _write_check = DATA_DIR / ".write_check"
+    _write_check.touch()
+    _write_check.unlink()
+    _DATA_DIR_WRITABLE = True
+except (OSError, PermissionError):
+    _DATA_DIR_WRITABLE = False
+
 def _load_env_file(path: Path) -> None:
     if not path.exists():
         return
@@ -454,26 +465,22 @@ def _writable_data_file(name: str) -> Path:
 
     On read-only filesystems (e.g. Vercel), the deployed data/ directory cannot
     be written to.  In that case we use /tmp/data/ which is always writable.
+    The writability of DATA_DIR is determined once at module load time.
     """
-    candidate = TMP_DATA_DIR / name
-    if candidate.exists():
-        return candidate
-    # Check if the original data dir is writable
-    original = DATA_DIR / name
-    try:
-        test = DATA_DIR / ".write_check"
-        test.touch()
-        test.unlink(missing_ok=True)
-        return original
-    except (OSError, PermissionError):
-        return candidate
+    if _DATA_DIR_WRITABLE:
+        return DATA_DIR / name
+    return TMP_DATA_DIR / name
 
 
 def _readable_data_file(name: str) -> Path:
     """Return the best path to read a JSON data file.
 
-    Prefer /tmp/data/ (holds recent writes) over the deployed data/ directory.
+    If data/ is writable (local/dev), always read from data/.
+    On read-only filesystems (Vercel), prefer /tmp/data/ (holds recent writes)
+    and fall back to data/ (initial deployed data).
     """
+    if _DATA_DIR_WRITABLE:
+        return DATA_DIR / name
     tmp_candidate = TMP_DATA_DIR / name
     if tmp_candidate.exists():
         return tmp_candidate
